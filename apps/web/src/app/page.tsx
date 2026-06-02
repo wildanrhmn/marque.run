@@ -173,7 +173,7 @@ Venice
             </div>
             <div className="flex gap-4">
               <Link href="/run" className="hover:text-white transition">launch</Link>
-              <a href="https://github.com/wildanrhmn/marque" target="_blank" rel="noreferrer" className="hover:text-white transition">github</a>
+              <a href="https://github.com/wildanrhmn/marque.run" target="_blank" rel="noreferrer" className="hover:text-white transition">github</a>
               <a href="https://x.com/MetaMaskDev" target="_blank" rel="noreferrer" className="hover:text-white transition">@MetaMaskDev</a>
             </div>
           </div>

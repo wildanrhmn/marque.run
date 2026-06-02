@@ -21,7 +21,7 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
           {variant === "landing" ? (
             <>
               <Link
-                href="https://github.com/wildanrhmn/marque"
+                href="https://github.com/wildanrhmn/marque.run"
                 target="_blank"
                 rel="noreferrer"
                 className="btn-ghost"
