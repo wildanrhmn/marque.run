@@ -8,8 +8,8 @@ import {
   type PrivateKeyAccount,
 } from "viem"
 import type { GrantedPermissionContext } from "./permissions"
-import { buildSpecialistCaveats } from "@delegate/delegation"
-import { USDC_BASE, type SpecialistKind } from "@delegate/shared"
+import { buildSpecialistCaveats } from "@marque/delegation"
+import { USDC_BASE, type SpecialistKind } from "@marque/shared"
 
 const DELEGATION_TYPES = {
   Caveat: [

@@ -16,8 +16,8 @@ export const wagmiConfig = createConfig({
   connectors: [
     metaMask({
       dappMetadata: {
-        name: "DELEGATE.RUN",
-        url: "https://delegate.run",
+        name: "MARQUE",
+        url: "https://marque.run",
       },
     }),
     injected(),

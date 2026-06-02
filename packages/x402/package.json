@@ -1,5 +1,5 @@
 {
-  "name": "@delegate/x402",
+  "name": "@marque/x402",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "lint": "echo lint placeholder"
   },
   "dependencies": {
-    "@delegate/shared": "workspace:*",
+    "@marque/shared": "workspace:*",
     "viem": "^2.21.45",
     "zod": "^3.23.8"
   },

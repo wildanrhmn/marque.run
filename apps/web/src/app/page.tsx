@@ -54,7 +54,7 @@ export default function LandingPage() {
                 for themselves.
               </h1>
               <p className="max-w-2xl text-pretty text-base text-neutral-300 sm:text-lg">
-                DELEGATE.RUN is a serverless runtime for agent swarms. No API keys. No servers. No custodied funds. Every agent carries a scoped MetaMask Smart Account delegation as its entire operating budget, pays Venice via x402, and settles through the 1Shot permissionless relayer in USDC.
+                MARQUE is a serverless runtime for agent swarms. No API keys. No servers. No custodied funds. Every agent carries a scoped MetaMask Smart Account delegation as its entire operating budget, pays Venice via x402, and settles through the 1Shot permissionless relayer in USDC.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <Link href="/run" className="btn-primary">
@@ -151,9 +151,9 @@ export default function LandingPage() {
             <pre className="panel overflow-x-auto p-6 text-[12px] leading-relaxed text-neutral-300">
 {`specialist agent
   └─ POST /broker/venice/image
-       X-PAYMENT: base64({ scheme: "delegate-run-v1", delegationContext: 0x... })
+       X-PAYMENT: base64({ scheme: "marque-v1", delegationContext: 0x... })
 
-DELEGATE.RUN broker  (on Progena VPS)
+MARQUE broker  (on Progena VPS)
   1. verify delegation chain off-chain
   2. relayer_send7710Transaction (1Shot)
        └─ webhook on destinationUrl confirms settlement
@@ -173,7 +173,7 @@ Venice
             </div>
             <div className="flex gap-4">
               <Link href="/run" className="hover:text-white transition">launch</Link>
-              <a href="https://github.com/wildanrhmn/delegate.run" target="_blank" rel="noreferrer" className="hover:text-white transition">github</a>
+              <a href="https://github.com/wildanrhmn/marque" target="_blank" rel="noreferrer" className="hover:text-white transition">github</a>
               <a href="https://x.com/MetaMaskDev" target="_blank" rel="noreferrer" className="hover:text-white transition">@MetaMaskDev</a>
             </div>
           </div>

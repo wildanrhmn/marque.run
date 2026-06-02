@@ -1,6 +1,6 @@
 import type { Hex } from "viem"
-import type { Delegation } from "@delegate/delegation"
-import type { BriefRequest, DirectorPlan, SpecialistKind, SpecialistTask } from "@delegate/shared"
+import type { Delegation } from "@marque/delegation"
+import type { BriefRequest, DirectorPlan, SpecialistKind, SpecialistTask } from "@marque/shared"
 import type { BrokerClient } from "./broker-client"
 import { createSpecialistRunner, type SpecialistOutput } from "./specialist"
 import { conceptSpecialist, type ConceptOutput } from "./specialists/concept"

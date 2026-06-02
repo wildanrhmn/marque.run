@@ -1,6 +1,6 @@
 import { EventEmitter } from "events"
 import type { Hex } from "viem"
-import type { AgentTimelineEvent } from "@delegate/shared"
+import type { AgentTimelineEvent } from "@marque/shared"
 import type { OneShotStatus } from "./oneshot"
 
 export interface RelayTask {

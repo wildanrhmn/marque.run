@@ -4,7 +4,7 @@ export const healthRoute = new Hono()
 
 healthRoute.get("/", (c) =>
   c.json({
-    service: "delegate-run-broker",
+    service: "marque-broker",
     status: "ok",
     ts: Date.now(),
   }),

@@ -55,7 +55,7 @@ export async function signSpecialistAuthorization(
   }
 }
 
-const SESSION_FLAG_KEY = "delegate.run.specialist-upgraded.v1"
+const SESSION_FLAG_KEY = "marque.specialist-upgraded.v1"
 
 export function markSpecialistUpgraded(address: Address): void {
   if (typeof window === "undefined") return

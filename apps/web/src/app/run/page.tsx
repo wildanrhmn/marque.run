@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useAccount, useConnect, useWriteContract } from "wagmi"
 import type { Address, Hex } from "viem"
-import type { AgentTimelineEvent, SpecialistKind } from "@delegate/shared"
+import type { AgentTimelineEvent, SpecialistKind } from "@marque/shared"
 import { Header } from "@/components/Header"
 import { StepIndicator, type StepKey } from "@/components/StepIndicator"
 import { AgentTimeline } from "@/components/AgentTimeline"
@@ -250,7 +250,7 @@ export default function RunPage() {
                   Connect a MetaMask wallet to begin.
                 </h2>
                 <p className="mt-2 max-w-prose text-sm text-neutral-400">
-                  DELEGATE.RUN runs on Base mainnet. You will sign one ERC-7715 permission
+                  MARQUE runs on Base mainnet. You will sign one ERC-7715 permission
                   granting an in-browser director up to $5 USDC/day, expiring in one hour. The
                   director never leaves your browser session, and the broker handles relay through 1Shot.
                 </p>

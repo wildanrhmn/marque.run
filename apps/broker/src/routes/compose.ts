@@ -67,11 +67,11 @@ composeRoute.post("/", async (c) => {
     const assetUrl = `${publicBase}/asset/${stored.filename}`
 
     const metadata = {
-      name: `DELEGATE.RUN ad ${briefId.slice(0, 10)}`,
+      name: `MARQUE ad ${briefId.slice(0, 10)}`,
       description: body.prompt,
       image: assetUrl,
       animation_url: assetUrl,
-      external_url: `https://delegate.run/runs/${briefId}`,
+      external_url: `https://marque.run/runs/${briefId}`,
       attributes: [
         { trait_type: "operator", value: operator },
         { trait_type: "duration_ms", value: result.durationMs },

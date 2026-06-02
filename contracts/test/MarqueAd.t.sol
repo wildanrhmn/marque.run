@@ -2,15 +2,15 @@
 pragma solidity 0.8.27;
 
 import {Test} from "forge-std/Test.sol";
-import {DelegateRunAd} from "../src/DelegateRunAd.sol";
+import {MarqueAd} from "../src/MarqueAd.sol";
 
-contract DelegateRunAdTest is Test {
-    DelegateRunAd internal nft;
+contract MarqueAdTest is Test {
+    MarqueAd internal nft;
     address internal owner = address(0xA11CE);
     address internal operator = address(0xB0B);
 
     function setUp() public {
-        nft = new DelegateRunAd(owner);
+        nft = new MarqueAd(owner);
     }
 
     function test_MintRecordsProvenance() public {
@@ -30,7 +30,7 @@ contract DelegateRunAdTest is Test {
 
     function test_RevertOnEmptyProvenance() public {
         bytes32[] memory hashes = new bytes32[](0);
-        vm.expectRevert(DelegateRunAd.EmptyProvenance.selector);
+        vm.expectRevert(MarqueAd.EmptyProvenance.selector);
         nft.mintAd(operator, bytes32(0), 0, hashes, "");
     }
 }

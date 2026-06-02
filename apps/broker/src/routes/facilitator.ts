@@ -7,7 +7,7 @@ import {
   SettleResponseSchema,
   type VerifyResponse,
   type SettleResponse,
-} from "@delegate/x402"
+} from "@marque/x402"
 import { logger } from "../log"
 
 const BodySchema = z.object({

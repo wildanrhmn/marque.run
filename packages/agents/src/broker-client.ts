@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem"
-import type { Delegation } from "@delegate/delegation"
-import type { SpecialistKind } from "@delegate/shared"
+import type { Delegation } from "@marque/delegation"
+import type { SpecialistKind } from "@marque/shared"
 
 export interface BrokerCallArgs {
   specialistKind: SpecialistKind
@@ -45,7 +45,7 @@ function serializeDelegation(d: Delegation): unknown {
 
 function buildEnvelope(args: BrokerCallArgs): string {
   const envelope = {
-    scheme: "delegate-run-v1",
+    scheme: "marque-v1",
     network: "eip155:8453",
     amountAtoms: args.amountAtoms.toString(),
     briefId: args.briefId,

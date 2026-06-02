@@ -1,6 +1,6 @@
 "use client"
 import { cn } from "@/lib/cn"
-import type { SpecialistKind } from "@delegate/shared"
+import type { SpecialistKind } from "@marque/shared"
 
 export interface AgentStatus {
   kind: SpecialistKind

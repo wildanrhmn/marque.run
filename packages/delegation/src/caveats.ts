@@ -1,5 +1,5 @@
 import type { Address } from "viem"
-import { USDC_BASE } from "@delegate/shared"
+import { USDC_BASE } from "@marque/shared"
 
 export interface MultiTokenPeriodSpec {
   token: Address

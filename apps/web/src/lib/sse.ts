@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import type { Hex } from "viem"
-import type { AgentTimelineEvent } from "@delegate/shared"
+import type { AgentTimelineEvent } from "@marque/shared"
 import { publicEnv } from "./env"
 
 export function useBriefStream(briefId: Hex | null): {

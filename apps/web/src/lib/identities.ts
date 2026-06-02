@@ -1,9 +1,9 @@
 "use client"
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts"
 import type { Address, Hex } from "viem"
-import type { SpecialistKind } from "@delegate/shared"
+import type { SpecialistKind } from "@marque/shared"
 
-const STORAGE_KEY = "delegate.run.session.v1"
+const STORAGE_KEY = "marque.session.v1"
 
 interface SessionIdentities {
   directorKey: Hex

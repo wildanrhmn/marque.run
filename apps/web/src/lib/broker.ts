@@ -1,5 +1,5 @@
 import type { Hex } from "viem"
-import type { SpecialistKind } from "@delegate/shared"
+import type { SpecialistKind } from "@marque/shared"
 import { publicEnv } from "./env"
 
 export interface BrokerCallArgs {
@@ -30,7 +30,7 @@ function toBase64(bytes: Uint8Array): string {
 
 function buildEnvelope(args: BrokerCallArgs): string {
   const envelope = {
-    scheme: "delegate-run-v1",
+    scheme: "marque-v1",
     network: "eip155:8453",
     amountAtoms: args.amountAtoms.toString(),
     briefId: args.briefId,

@@ -15,7 +15,7 @@ export interface ConceptOutput {
   brand: { name: string; palette: string[] }
 }
 
-const SYSTEM = `You are the creative director inside DELEGATE.RUN, a serverless agent runtime.
+const SYSTEM = `You are the creative director inside MARQUE, a serverless agent runtime.
 Given a brief, output a JSON object with: hook (one sentence), scenes (array of 3 to 5 with description, voiceLine, durationMs summing to about 30000), musicPrompt, brand { name, palette of 3 hex colors }.
 Output JSON only, no prose.`
 

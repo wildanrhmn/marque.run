@@ -4,7 +4,7 @@ pragma solidity 0.8.27;
 import {ERC721} from "openzeppelin/token/ERC721/ERC721.sol";
 import {Ownable} from "openzeppelin/access/Ownable.sol";
 
-contract DelegateRunAd is ERC721, Ownable {
+contract MarqueAd is ERC721, Ownable {
     struct Provenance {
         bytes32 briefId;
         address operator;
@@ -26,7 +26,7 @@ contract DelegateRunAd is ERC721, Ownable {
 
     error EmptyProvenance();
 
-    constructor(address initialOwner) ERC721("DELEGATE.RUN Ad", "DRAD") Ownable(initialOwner) {}
+    constructor(address initialOwner) ERC721("MARQUE Ad", "DRAD") Ownable(initialOwner) {}
 
     function mintAd(
         address to,

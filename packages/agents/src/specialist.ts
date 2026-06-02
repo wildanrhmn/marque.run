@@ -1,6 +1,6 @@
 import type { Hex } from "viem"
-import type { Delegation } from "@delegate/delegation"
-import type { SpecialistKind } from "@delegate/shared"
+import type { Delegation } from "@marque/delegation"
+import type { SpecialistKind } from "@marque/shared"
 import { BrokerClient } from "./broker-client"
 
 export interface SpecialistRunArgs {

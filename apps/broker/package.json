@@ -1,5 +1,5 @@
 {
-  "name": "@delegate/broker",
+  "name": "@marque/broker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,9 +12,9 @@
     "lint": "echo lint placeholder"
   },
   "dependencies": {
-    "@delegate/delegation": "workspace:*",
-    "@delegate/shared": "workspace:*",
-    "@delegate/x402": "workspace:*",
+    "@marque/delegation": "workspace:*",
+    "@marque/shared": "workspace:*",
+    "@marque/x402": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "@noble/ed25519": "^2.1.0",
     "dotenv": "^16.4.5",

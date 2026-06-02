@@ -1,6 +1,6 @@
 "use client"
 import { useMemo } from "react"
-import type { AgentTimelineEvent } from "@delegate/shared"
+import type { AgentTimelineEvent } from "@marque/shared"
 import { cn } from "@/lib/cn"
 import { relativeTime, shortTx } from "@/lib/format"
 

@@ -1,9 +1,9 @@
 import { createPrivateKey } from "crypto"
 import { privateKeyToAccount } from "viem/accounts"
 import type { Address, Hex } from "viem"
-import { buildEip3009Payment, encodePaymentHeader } from "@delegate/x402"
-import { BASE_CHAIN_ID, USDC_BASE, VENICE_DEFAULT_TIMEOUT_SECONDS, VeniceError } from "@delegate/shared"
-import type { VeniceEndpoint } from "@delegate/shared"
+import { buildEip3009Payment, encodePaymentHeader } from "@marque/x402"
+import { BASE_CHAIN_ID, USDC_BASE, VENICE_DEFAULT_TIMEOUT_SECONDS, VeniceError } from "@marque/shared"
+import type { VeniceEndpoint } from "@marque/shared"
 import { logger } from "./log"
 
 export interface VeniceClientArgs {

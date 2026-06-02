@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy DelegateRunAd to Base mainnet using the broker float wallet.
+# Deploy MarqueAd to Base mainnet using the broker float wallet.
 # Reads BROKER_FLOAT_PRIVATE_KEY from apps/broker/.env (chmod 600).
 # Owner of the contract defaults to the broker float address; override with DEPLOY_OWNER env.
 
@@ -48,13 +48,13 @@ fi
 
 echo "==> broadcasting deployment"
 DEPLOYER_PRIVATE_KEY="$DEPLOYER_PRIVATE_KEY" DEPLOY_OWNER="$DEPLOY_OWNER" \
-  forge script script/Deploy.s.sol:DeployDelegateRunAd \
+  forge script script/Deploy.s.sol:DeployMarqueAd \
   --rpc-url "$RPC_URL" \
   --broadcast \
   --slow \
-  2>&1 | tee /tmp/delegate-run-deploy.log
+  2>&1 | tee /tmp/marque-deploy.log
 
-ADDR=$(grep -oE '0x[a-fA-F0-9]{40}' /tmp/delegate-run-deploy.log | tail -1 || true)
+ADDR=$(grep -oE '0x[a-fA-F0-9]{40}' /tmp/marque-deploy.log | tail -1 || true)
 if [[ -z "$ADDR" ]]; then
   echo "could not parse deployed address from output" >&2
   exit 1

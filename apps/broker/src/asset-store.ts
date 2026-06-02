@@ -3,7 +3,7 @@ import { mkdir, writeFile, readFile, stat } from "fs/promises"
 import { join, resolve } from "path"
 import { logger } from "./log"
 
-const ROOT = resolve(process.env.BROKER_ASSET_DIR ?? "/var/lib/delegate-broker/assets")
+const ROOT = resolve(process.env.BROKER_ASSET_DIR ?? "/var/lib/marque-broker/assets")
 
 async function ensureRoot(): Promise<void> {
   await mkdir(ROOT, { recursive: true })

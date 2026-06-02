@@ -1,5 +1,5 @@
 {
-  "name": "@delegate/agents",
+  "name": "@marque/agents",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,9 @@
     "lint": "echo lint placeholder"
   },
   "dependencies": {
-    "@delegate/delegation": "workspace:*",
-    "@delegate/shared": "workspace:*",
-    "@delegate/x402": "workspace:*",
+    "@marque/delegation": "workspace:*",
+    "@marque/shared": "workspace:*",
+    "@marque/x402": "workspace:*",
     "@metamask/smart-accounts-kit": "^1.5.0",
     "viem": "^2.21.45",
     "zod": "^3.23.8"

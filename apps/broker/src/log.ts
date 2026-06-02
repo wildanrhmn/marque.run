@@ -5,7 +5,7 @@ const env = loadEnv()
 
 export const logger = pino({
   level: env.LOG_LEVEL,
-  base: { svc: "delegate-broker" },
+  base: { svc: "marque-broker" },
   formatters: {
     level: (label) => ({ level: label }),
   },

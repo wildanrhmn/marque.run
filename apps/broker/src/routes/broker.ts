@@ -9,7 +9,7 @@ import {
   USDC_BASE,
   type SpecialistKind,
   SPECIALIST_TO_VENICE,
-} from "@delegate/shared"
+} from "@marque/shared"
 import { loadEnv } from "../env"
 import { logger } from "../log"
 import { OneShotClient, type OneShotCapabilities, type OneShotAuthorizationListEntry } from "../oneshot"
@@ -29,7 +29,7 @@ const AuthorizationListEntrySchema = z.object({
 })
 
 const PaymentEnvelopeSchema = z.object({
-  scheme: z.literal("delegate-run-v1"),
+  scheme: z.literal("marque-v1"),
   network: z.literal("eip155:8453"),
   amountAtoms: z.string().regex(/^\d+$/),
   briefId: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
@@ -231,12 +231,12 @@ brokerRoute.post("/venice/:specialistKind", async (c) => {
     return c.json(
       {
         x402Version: 1,
-        error: "X-PAYMENT (delegate-run-v1) header required",
+        error: "X-PAYMENT (marque-v1) header required",
         accepts: [
           {
-            scheme: "delegate-run-v1",
+            scheme: "marque-v1",
             network: "eip155:8453",
-            description: `delegate.run broker for venice ${SPECIALIST_TO_VENICE[kindParam]}`,
+            description: `marque.run broker for venice ${SPECIALIST_TO_VENICE[kindParam]}`,
             payTo: ctx.brokerAddress,
             asset: USDC_BASE,
             maxTimeoutSeconds: 120,

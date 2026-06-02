@@ -1,7 +1,7 @@
 "use client"
 import { type Address, type Hex, createPublicClient, http } from "viem"
 import { base } from "viem/chains"
-import type { SpecialistKind } from "@delegate/shared"
+import type { SpecialistKind } from "@marque/shared"
 import { brokerCall } from "./broker"
 import { getSessionIdentities } from "./identities"
 import {

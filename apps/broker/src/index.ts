@@ -45,5 +45,5 @@ app.onError((err, c) => {
 const port = env.BROKER_PORT
 const hostname = process.env.BROKER_BIND ?? "127.0.0.1"
 serve({ fetch: app.fetch, port, hostname }, (info) => {
-  logger.info({ port: info.port, hostname }, "delegate-broker listening")
+  logger.info({ port: info.port, hostname }, "marque-broker listening")
 })

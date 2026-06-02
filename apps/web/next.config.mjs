@@ -2,10 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: [
-    "@delegate/shared",
-    "@delegate/x402",
-    "@delegate/delegation",
-    "@delegate/agents",
+    "@marque/shared",
+    "@marque/x402",
+    "@marque/delegation",
+    "@marque/agents",
   ],
   experimental: {
     optimizePackageImports: ["viem", "wagmi", "@rainbow-me/rainbowkit"],

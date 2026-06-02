@@ -1,6 +1,6 @@
 import { type Address, type Hex, getAddress, hexToBytes, bytesToHex } from "viem"
 import type { LocalAccount } from "viem/accounts"
-import { BASE_CHAIN_ID, USDC_BASE, USDC_EIP712_NAME, USDC_EIP712_VERSION } from "@delegate/shared"
+import { BASE_CHAIN_ID, USDC_BASE, USDC_EIP712_NAME, USDC_EIP712_VERSION } from "@marque/shared"
 import type { Eip3009Authorization, ExactEvmPayload, PaymentPayload } from "./types"
 
 const TRANSFER_WITH_AUTHORIZATION_TYPES = {

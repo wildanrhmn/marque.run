@@ -1,5 +1,5 @@
 {
-  "name": "delegate-run",
+  "name": "marque",
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@10.10.0",
@@ -7,8 +7,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev:web": "pnpm --filter @delegate/web dev",
-    "dev:broker": "pnpm --filter @delegate/broker dev",
+    "dev:web": "pnpm --filter @marque/web dev",
+    "dev:broker": "pnpm --filter @marque/broker dev",
     "build": "pnpm -r --filter=./apps/* --filter=./packages/* build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",

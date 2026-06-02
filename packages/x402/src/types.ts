@@ -1,6 +1,6 @@
 import { z } from "zod"
 import type { Address, Hex } from "viem"
-import type { Caip2Network } from "@delegate/shared"
+import type { Caip2Network } from "@marque/shared"
 
 export const X402_VERSION = 1 as const
 export const X402_HEADER = "X-PAYMENT"

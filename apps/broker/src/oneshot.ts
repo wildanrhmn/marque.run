@@ -1,5 +1,5 @@
 import type { Address, Hex } from "viem"
-import { OneShotRelayError } from "@delegate/shared"
+import { OneShotRelayError } from "@marque/shared"
 
 export interface OneShotCapabilities {
   feeCollector: Address

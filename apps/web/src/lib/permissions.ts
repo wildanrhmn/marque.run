@@ -69,7 +69,7 @@ export async function requestBudgetPermission(
         periodAmount: args.perDayUsdcAtoms.toString(),
         periodDuration: 86400,
         startTime: Math.floor(Date.now() / 1000),
-        justification: "delegate.run agent swarm budget",
+        justification: "marque agent swarm budget",
       },
       isAdjustmentAllowed: true,
     },
