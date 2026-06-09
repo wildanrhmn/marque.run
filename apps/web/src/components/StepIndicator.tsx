@@ -31,9 +31,11 @@ export function StepIndicator({ currentStep, completed }: { currentStep: StepKey
                 <span
                   className={cn(
                     "grid h-7 w-7 place-items-center rounded-full text-[12px] font-semibold transition",
-                    isComplete && "bg-white text-neutral-950",
-                    !isComplete && isActive && "bg-sig text-white shadow-[0_0_0_4px_rgba(255,107,53,0.18)]",
-                    !isComplete && !isActive && "bg-white/5 text-neutral-500",
+                    isComplete && "bg-brass text-ink-950",
+                    !isComplete &&
+                      isActive &&
+                      "bg-brass/15 text-brass shadow-[0_0_0_4px_rgba(201,164,92,0.14)] ring-1 ring-brass/50",
+                    !isComplete && !isActive && "bg-bone/5 text-slate-dim",
                   )}
                 >
                   {isComplete ? (
@@ -48,19 +50,19 @@ export function StepIndicator({ currentStep, completed }: { currentStep: StepKey
                   <span
                     className={cn(
                       "text-[13px] font-medium",
-                      isActive ? "text-white" : isComplete ? "text-neutral-200" : "text-neutral-500",
+                      isActive ? "text-bone" : isComplete ? "text-bone/80" : "text-slate-dim",
                     )}
                   >
                     {step.label}
                   </span>
-                  <span className="text-[11px] text-neutral-500">{step.caption}</span>
+                  <span className="text-[11px] text-slate-dim">{step.caption}</span>
                 </div>
               </div>
               {i < RUN_STEPS.length - 1 ? (
                 <div
                   className={cn(
                     "ml-9 mt-2 h-px w-full transition",
-                    i < currentIndex || isComplete ? "bg-white/30" : "bg-white/8",
+                    i < currentIndex || isComplete ? "bg-brass/40" : "bg-bone/[0.08]",
                   )}
                 />
               ) : null}

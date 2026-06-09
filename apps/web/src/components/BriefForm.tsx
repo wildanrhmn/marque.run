@@ -33,7 +33,7 @@ export function BriefForm({
   return (
     <div className="space-y-5">
       <div>
-        <label className="mb-2 block text-[12px] font-medium uppercase tracking-wider text-neutral-400">
+        <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-slate">
           your brief
         </label>
         <textarea
@@ -50,7 +50,7 @@ export function BriefForm({
               type="button"
               onClick={() => setPrompt(s)}
               disabled={busy}
-              className="rounded-full border border-white/8 bg-white/[0.02] px-3 py-1 text-[11px] text-neutral-400 hover:border-white/20 hover:text-white transition"
+              className="rounded-full border border-bone/[0.08] bg-bone/[0.02] px-3 py-1 text-[11px] text-slate transition hover:border-brass/30 hover:text-bone"
             >
               {s.slice(0, 38)}…
             </button>
@@ -59,8 +59,8 @@ export function BriefForm({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-2 block text-[12px] font-medium uppercase tracking-wider text-neutral-400">
-            duration · {duration}s
+          <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-slate">
+            duration · <span className="text-bone">{duration}s</span>
           </label>
           <input
             type="range"
@@ -70,12 +70,12 @@ export function BriefForm({
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
             disabled={busy}
-            className="w-full accent-white"
+            className="w-full accent-brass"
           />
         </div>
         <div>
-          <label className="mb-2 block text-[12px] font-medium uppercase tracking-wider text-neutral-400">
-            budget · ${budgetUsdc.toFixed(2)} USDC
+          <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-slate">
+            budget · <span className="text-bone">${budgetUsdc.toFixed(2)}</span>
           </label>
           <input
             type="range"
@@ -85,15 +85,19 @@ export function BriefForm({
             value={budgetUsdc}
             onChange={(e) => setBudgetUsdc(Number(e.target.value))}
             disabled={busy}
-            className="w-full accent-white"
+            className="w-full accent-brass"
           />
         </div>
       </div>
-      <div className="flex items-center justify-between border-t border-white/5 pt-4">
-        <div className="text-[12px] text-neutral-500">
+      <div className="flex items-center justify-between border-t border-bone/[0.06] pt-4">
+        <div className="text-[12px] text-slate-dim">
           delegation budget caps total spend. agent never holds funds.
         </div>
-        <button className="btn-primary" disabled={busy || !prompt.trim()} onClick={submit}>
+        <button
+          className="btn-primary shine-host"
+          disabled={busy || !prompt.trim()}
+          onClick={submit}
+        >
           {busy ? "running…" : "send brief"}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M5 12h14M13 6l6 6-6 6" />
