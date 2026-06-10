@@ -22,7 +22,7 @@ Output JSON only, no prose.`
 export const conceptSpecialist: SpecialistDefinition<VeniceChatBody, ConceptOutput> = {
   kind: "concept",
   buildVeniceBody: (run: SpecialistRunArgs) => ({
-    model: "venice-uncensored",
+    model: "qwen3-235b-a22b-instruct-2507",
     messages: [
       { role: "system", content: SYSTEM },
       { role: "user", content: run.prompt },

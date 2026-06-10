@@ -15,7 +15,7 @@ export interface MusicOutput {
 export const musicSpecialist: SpecialistDefinition<VeniceMusicBody, MusicOutput> = {
   kind: "music",
   buildVeniceBody: (run: SpecialistRunArgs) => ({
-    model: "venice-music-1",
+    model: "stable-audio-25",
     prompt: run.prompt,
     duration: (run.parameters.durationSeconds as number | undefined) ?? 30,
     output_format: "mp3",

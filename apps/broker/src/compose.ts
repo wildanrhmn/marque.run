@@ -131,3 +131,129 @@ export async function composeAd(req: ComposeRequest): Promise<ComposeResult> {
     await rm(workDir, { recursive: true, force: true }).catch(() => undefined)
   }
 }
+
+export interface ComposeClipsRequest {
+  clips: Buffer[]
+  voice?: Buffer
+  music?: Buffer
+  width?: number
+  height?: number
+}
+
+export async function composeFromClips(req: ComposeClipsRequest): Promise<ComposeResult> {
+  if (req.clips.length === 0) throw new Error("composeFromClips requires at least one clip")
+  const width = req.width ?? 1280
+  const height = req.height ?? 720
+  const workDir = await mkdtemp(join(tmpdir(), "marque-clips-"))
+  try {
+    const clipPaths: string[] = []
+    for (let i = 0; i < req.clips.length; i++) {
+      const p = join(workDir, `clip-${i}.mp4`)
+      await writeFile(p, req.clips[i]!)
+      clipPaths.push(p)
+    }
+
+    const concatPath = join(workDir, "concat.mp4")
+    if (clipPaths.length === 1) {
+      await writeFile(concatPath, req.clips[0]!)
+    } else {
+      const inputs: string[] = []
+      for (const p of clipPaths) inputs.push("-i", p)
+      const n = clipPaths.length
+      const streams = clipPaths
+        .map((_, i) => `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1[v${i}]`)
+        .join(";")
+      const concat = clipPaths.map((_, i) => `[v${i}]`).join("") + `concat=n=${n}:v=1:a=0[vout]`
+      const args = [
+        ...inputs,
+        "-filter_complex",
+        `${streams};${concat}`,
+        "-map",
+        "[vout]",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-y",
+        concatPath,
+      ]
+      const r = await runCommand("ffmpeg", args)
+      if (r.code !== 0) {
+        logger.error({ stderr: r.stderr.slice(-1500) }, "concat ffmpeg failed")
+        throw new Error(`concat ffmpeg exited ${r.code}`)
+      }
+    }
+
+    if (!req.voice && !req.music) {
+      const mp4 = await readFile(concatPath)
+      return { mp4, durationMs: 0 }
+    }
+
+    // Video is the master duration. Voice plays at the start (padded with silence
+    // so it never shortens the output); music loops underneath to fill the whole ad.
+    const inputs: string[] = ["-i", concatPath]
+    const voicePath = join(workDir, "voice.mp3")
+    const musicPath = join(workDir, "music.wav")
+    let voiceIdx = -1
+    let musicIdx = -1
+    let next = 1
+    if (req.voice) {
+      await writeFile(voicePath, req.voice)
+      inputs.push("-i", voicePath)
+      voiceIdx = next++
+    }
+    if (req.music) {
+      await writeFile(musicPath, req.music)
+      inputs.push("-stream_loop", "-1", "-i", musicPath)
+      musicIdx = next++
+    }
+
+    const filters: string[] = []
+    let aout: string
+    if (voiceIdx >= 0 && musicIdx >= 0) {
+      filters.push(`[${voiceIdx}:a]volume=1.0,apad[va]`)
+      filters.push(`[${musicIdx}:a]volume=0.26[ma]`)
+      filters.push(`[va][ma]amix=inputs=2:duration=longest:dropout_transition=0[aout]`)
+      aout = "[aout]"
+    } else if (voiceIdx >= 0) {
+      filters.push(`[${voiceIdx}:a]volume=1.0,apad[aout]`)
+      aout = "[aout]"
+    } else {
+      filters.push(`[${musicIdx}:a]volume=0.5[aout]`)
+      aout = "[aout]"
+    }
+
+    const outputPath = join(workDir, "final.mp4")
+    const args = [
+      ...inputs,
+      "-filter_complex",
+      filters.join(";"),
+      "-map",
+      "0:v",
+      "-map",
+      aout,
+      "-c:v",
+      "copy",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "160k",
+      "-shortest",
+      "-y",
+      outputPath,
+    ]
+    const r = await runCommand("ffmpeg", args)
+    if (r.code !== 0) {
+      logger.error({ stderr: r.stderr.slice(-1500) }, "mux ffmpeg failed")
+      throw new Error(`mux ffmpeg exited ${r.code}`)
+    }
+    const mp4 = await readFile(outputPath)
+    return { mp4, durationMs: 0 }
+  } finally {
+    await rm(workDir, { recursive: true, force: true }).catch(() => undefined)
+  }
+}

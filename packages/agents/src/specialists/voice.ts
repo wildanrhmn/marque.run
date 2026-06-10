@@ -15,8 +15,8 @@ export interface VoiceOutput {
 export const voiceSpecialist: SpecialistDefinition<VeniceTtsBody, VoiceOutput> = {
   kind: "voice",
   buildVeniceBody: (run: SpecialistRunArgs) => ({
-    model: (run.parameters.model as string | undefined) ?? "venice-tts-1",
-    voice: (run.parameters.voice as string | undefined) ?? "river",
+    model: (run.parameters.model as string | undefined) ?? "tts-kokoro",
+    voice: (run.parameters.voice as string | undefined) ?? "af_sky",
     input: run.prompt,
     response_format: "mp3",
   }),

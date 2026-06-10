@@ -10,12 +10,20 @@ import { webhookRoute } from "./routes/webhook"
 import { streamRoute } from "./routes/stream"
 import { composeRoute } from "./routes/compose"
 import { assetRoute } from "./routes/asset"
+import { generateRoute } from "./routes/generate"
 
 const env = loadEnv()
 
 const app = new Hono()
 
-app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"] }))
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["authorization", "content-type", "x-payment"],
+  }),
+)
 
 const bearerOnly = async (c: import("hono").Context, next: () => Promise<void>) => {
   const auth = c.req.header("authorization")
@@ -28,6 +36,7 @@ const bearerOnly = async (c: import("hono").Context, next: () => Promise<void>) 
 
 app.use("/broker/*", bearerOnly)
 app.use("/compose/*", bearerOnly)
+app.use("/generate/*", bearerOnly)
 
 app.route("/health", healthRoute)
 app.route("/x402", facilitatorRoute)
@@ -36,6 +45,7 @@ app.route("/webhook", webhookRoute)
 app.route("/stream", streamRoute)
 app.route("/compose", composeRoute)
 app.route("/asset", assetRoute)
+app.route("/generate", generateRoute)
 
 app.onError((err, c) => {
   logger.error({ err }, "unhandled broker error")

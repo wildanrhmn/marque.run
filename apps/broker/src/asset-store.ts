@@ -33,11 +33,15 @@ export async function storeAsset(args: StoreAssetArgs): Promise<StoredAsset> {
   const ext =
     args.contentType.startsWith("video/")
       ? ".mp4"
-      : args.contentType.startsWith("image/")
-        ? ".png"
-        : args.contentType.startsWith("audio/")
-          ? ".mp3"
-          : ".bin"
+      : args.contentType.includes("webp")
+        ? ".webp"
+        : args.contentType.startsWith("image/")
+          ? ".png"
+          : args.contentType.includes("wav")
+            ? ".wav"
+            : args.contentType.startsWith("audio/")
+              ? ".mp3"
+              : ".bin"
   const filename = args.filename ?? `${cid}${ext}`
   const path = join(ROOT, filename)
   await writeFile(path, args.data)

@@ -3,10 +3,11 @@ import type { SpecialistDefinition, SpecialistRunArgs } from "../specialist"
 interface VeniceVideoBody {
   model: string
   prompt: string
-  duration: number
-  width: number
-  height: number
-  fps: number
+  duration: "5s" | "10s"
+  resolution: string
+  aspect_ratio: string
+  image_url?: string
+  negative_prompt?: string
 }
 
 export interface VideoOutput {
@@ -17,14 +18,19 @@ export interface VideoOutput {
 
 export const videoSpecialist: SpecialistDefinition<VeniceVideoBody, VideoOutput> = {
   kind: "video",
-  buildVeniceBody: (run: SpecialistRunArgs) => ({
-    model: "venice-video-1",
-    prompt: run.prompt,
-    duration: (run.parameters.durationSeconds as number | undefined) ?? 5,
-    width: 1280,
-    height: 720,
-    fps: 24,
-  }),
+  buildVeniceBody: (run: SpecialistRunArgs) => {
+    const secs = (run.parameters.durationSeconds as number | undefined) ?? 5
+    const referenceImage = run.parameters.imageUrl as string | undefined
+    const body: VeniceVideoBody = {
+      model: referenceImage ? "seedance-2-0-fast-image-to-video" : "seedance-2-0-fast-text-to-video",
+      prompt: run.prompt,
+      duration: secs > 5 ? "10s" : "5s",
+      resolution: (run.parameters.resolution as string | undefined) ?? "720p",
+      aspect_ratio: (run.parameters.aspectRatio as string | undefined) ?? "16:9",
+    }
+    if (referenceImage) body.image_url = referenceImage
+    return body
+  },
   parseResult: (raw): VideoOutput => {
     if (raw instanceof ArrayBuffer) {
       const bytes = new Uint8Array(raw)
