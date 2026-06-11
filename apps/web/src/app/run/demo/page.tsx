@@ -256,6 +256,18 @@ export default function RunDemoPage() {
           url = b64.startsWith("data:") ? b64 : `data:image/webp;base64,${b64}`
           type = "image/webp"
         }
+      } else if (tpl.steps.voice) {
+        const d = (await call("voice", { prompt: prompt.trim(), voice })) as { mediaUrl?: string; mediaType?: string }
+        if (d?.mediaUrl) {
+          url = d.mediaUrl
+          type = d.mediaType ?? "audio/mpeg"
+        }
+      } else if (tpl.steps.music) {
+        const d = (await call("music", { prompt: prompt.trim() })) as { mediaUrl?: string; mediaType?: string }
+        if (d?.mediaUrl) {
+          url = d.mediaUrl
+          type = d.mediaType ?? "audio/wav"
+        }
       }
       if (cancel.current) return
       setStepIndex(STEPS.length)

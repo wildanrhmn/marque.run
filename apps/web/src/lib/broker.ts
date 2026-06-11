@@ -56,5 +56,16 @@ export async function brokerCall<T = unknown>(args: BrokerCallArgs): Promise<Bro
     const text = await res.text()
     throw new Error(`broker ${args.specialistKind} ${res.status}: ${text}`)
   }
-  return (await res.json()) as BrokerCallResult<T>
+  const contentType = res.headers.get("content-type") ?? ""
+  if (contentType.includes("application/json")) {
+    return (await res.json()) as BrokerCallResult<T>
+  }
+  const blob = await res.blob()
+  const mediaUrl = URL.createObjectURL(blob)
+  return {
+    brokerSettlementTaskId: (res.headers.get("x-broker-settlement-task") ?? "0x") as Hex,
+    brokerSettlementTxHash: (res.headers.get("x-broker-settlement-tx") || undefined) as Hex | undefined,
+    contentType,
+    data: { mediaUrl, mediaType: contentType } as T,
+  }
 }

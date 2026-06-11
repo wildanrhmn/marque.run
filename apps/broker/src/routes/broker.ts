@@ -15,7 +15,7 @@ import {
 import { loadEnv } from "../env"
 import { logger } from "../log"
 import { OneShotClient, type OneShotCapabilities, type OneShotAuthorizationListEntry } from "../oneshot"
-import { VeniceClient } from "../venice"
+import { VeniceRestClient } from "../venice-rest"
 import { state } from "../state"
 
 const SPECIALIST_KINDS = ["concept", "image", "voice", "music", "video"] as const
@@ -24,31 +24,55 @@ const CONCEPT_SYSTEM = `You are a creative director. Given a creative brief, ret
 hook (one sentence), scenes (array of objects with description and voiceLine), musicPrompt (one phrase), brand { name, palette: array of 3 hex colors }.
 Keep scene descriptions vivid and cinematic. Output JSON only, no prose.`
 
-function normalizeVeniceBody(kind: SpecialistKind, raw: unknown): unknown {
+interface VeniceOutput {
+  contentType: string
+  json?: unknown
+  buffer?: Buffer
+}
+
+async function runVenice(rest: VeniceRestClient, kind: SpecialistKind, raw: unknown): Promise<VeniceOutput> {
   const r = (raw ?? {}) as { prompt?: string; durationSeconds?: number; voice?: string }
-  if (r && typeof r === "object" && "model" in (r as Record<string, unknown>)) return raw
   const prompt = (r.prompt ?? "").toString().trim()
   switch (kind) {
-    case "concept":
-      return {
+    case "concept": {
+      const content = await rest.chat({
         model: FIXED_MODELS.concept,
-        messages: [
-          { role: "system", content: CONCEPT_SYSTEM },
-          { role: "user", content: prompt || "A short brand film." },
-        ],
-        max_tokens: 1200,
-        temperature: 0.8,
-      }
-    case "image":
-      return { model: FIXED_MODELS.image, prompt: prompt || "cinematic brass-lit product hero shot", width: 1024, height: 1024 }
-    case "voice":
-      return { model: FIXED_MODELS.voice, input: prompt || "Marque.", voice: r.voice ?? DEFAULT_VOICE }
-    case "music":
-      return { model: FIXED_MODELS.music, prompt: prompt || "moody cinematic ambient soundtrack" }
-    case "video":
-      return { model: "seedance-1-5-pro", prompt: prompt || "cinematic brand film", duration: "5", resolution: "480p", aspect_ratio: "16:9" }
+        system: CONCEPT_SYSTEM,
+        user: prompt || "A short brand film.",
+        jsonObject: true,
+        maxTokens: 1200,
+      })
+      return { contentType: "application/json", json: { content } }
+    }
+    case "image": {
+      const img = await rest.image({
+        model: FIXED_MODELS.image,
+        prompt: prompt || "cinematic brass-lit product hero shot",
+        width: 1024,
+        height: 1024,
+      })
+      return { contentType: "application/json", json: { images: [img.base64], mime: img.mime } }
+    }
+    case "voice": {
+      const buf = await rest.tts({ model: FIXED_MODELS.voice, input: prompt || "Marque.", voice: r.voice ?? DEFAULT_VOICE })
+      return { contentType: "audio/mpeg", buffer: buf }
+    }
+    case "music": {
+      const buf = await rest.music({ model: FIXED_MODELS.music, prompt: prompt || "moody cinematic ambient soundtrack" })
+      return { contentType: "audio/wav", buffer: buf }
+    }
+    case "video": {
+      const buf = await rest.video({
+        model: "seedance-1-5-pro",
+        prompt: prompt || "cinematic brand film",
+        duration: "5",
+        resolution: "480p",
+        aspectRatio: "16:9",
+      })
+      return { contentType: "video/mp4", buffer: buf }
+    }
     default:
-      return raw
+      throw new BrokerVerificationError(`unknown specialist ${kind}`)
   }
 }
 
@@ -90,7 +114,7 @@ function parsePaymentHeader(header: string | null): PaymentEnvelope | null {
 
 interface RouteContext {
   oneShot: OneShotClient
-  venice: VeniceClient
+  venice: VeniceRestClient
   brokerAddress: Address
   webhookUrl: string
   delegationManager: Address
@@ -106,13 +130,9 @@ function getContext(): RouteContext {
   const floatAccount = privateKeyToAccount(env.BROKER_FLOAT_PRIVATE_KEY)
   context = {
     oneShot: new OneShotClient({ endpoint: env.ONESHOT_RELAYER_URL }),
-    venice: new VeniceClient({
+    venice: new VeniceRestClient({
       apiBase: env.VENICE_API_BASE,
-      payTo: env.VENICE_PAY_TO,
-      floatPrivateKey: env.BROKER_FLOAT_PRIVATE_KEY,
-      usdc: env.USDC_BASE,
-      chainId: BASE_CHAIN_ID,
-      apiKey: env.VENICE_API_KEY,
+      apiKey: env.VENICE_API_KEY ?? "",
     }),
     brokerAddress: floatAccount.address,
     webhookUrl: `${env.ONESHOT_WEBHOOK_PUBLIC_BASE_URL.replace(/\/+$/, "")}/webhook/relay`,
@@ -295,44 +315,31 @@ brokerRoute.post("/venice/:specialistKind", async (c) => {
     details: { veniceEndpoint, priceAtoms: envelope.amountAtoms },
   })
 
-  const veniceResult = await ctx.venice.call({
-    endpoint: veniceEndpoint,
-    body: normalizeVeniceBody(kindParam, requestBody),
-    priceAtoms: BigInt(envelope.amountAtoms),
-  })
+  const result = await runVenice(ctx.venice, kindParam, requestBody)
 
   state.emit({
     briefId: envelope.briefId as Hex,
     ts: Date.now(),
     kind: "specialist.venice.response",
     specialistKind: kindParam,
-    details: {
-      veniceEndpoint,
-      balanceRemaining: veniceResult.balanceRemaining,
-      paymentTxHash: veniceResult.paymentTxHash,
-      settlementHash: hash,
-    },
+    details: { veniceEndpoint, contentType: result.contentType, settlementHash: hash },
   })
 
-  if (typeof veniceResult.body === "object" && veniceResult.body !== null && !(veniceResult.body instanceof ArrayBuffer)) {
+  if (result.json !== undefined) {
     return c.json({
       brokerSettlementTaskId: taskId,
       brokerSettlementTxHash: hash,
-      venicePaymentTxHash: veniceResult.paymentTxHash,
-      veniceBalanceRemaining: veniceResult.balanceRemaining,
-      contentType: veniceResult.contentType,
-      data: veniceResult.body,
+      contentType: result.contentType,
+      data: result.json,
     })
   }
 
-  const buffer = veniceResult.body as ArrayBuffer
-  return new Response(buffer, {
+  return new Response(new Uint8Array(result.buffer!), {
     status: 200,
     headers: {
-      "content-type": veniceResult.contentType,
+      "content-type": result.contentType,
       "x-broker-settlement-task": taskId,
       "x-broker-settlement-tx": hash ?? "",
-      "x-venice-payment-tx": veniceResult.paymentTxHash ?? "",
     },
   })
 })

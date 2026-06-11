@@ -93,15 +93,15 @@ async function main() {
     network: "eip155:8453",
     amountAtoms: "20000",
     briefId,
-    specialistKind: "concept",
+    specialistKind: "music",
     delegations: [toRelayerJson(signedChild), toRelayerJson(signedRoot)],
   }
   const xPayment = Buffer.from(JSON.stringify(envelope)).toString("base64")
 
-  const body = { prompt: "30s ad for a cold brew brand called Lichen, moody indie tone", durationSeconds: 30 }
+  const body = { prompt: "moody indie cold brew brand soundtrack, warm analog, slow tempo" }
 
-  console.log("posting to broker /broker/venice/concept ...")
-  const res = await fetch(`${BROKER_URL}/broker/venice/concept`, {
+  console.log("posting to broker /broker/venice/music ...")
+  const res = await fetch(`${BROKER_URL}/broker/venice/music`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
