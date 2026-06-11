@@ -9,6 +9,8 @@ import {
   USDC_BASE,
   type SpecialistKind,
   SPECIALIST_TO_VENICE,
+  FIXED_MODELS,
+  DEFAULT_VOICE,
 } from "@marque/shared"
 import { loadEnv } from "../env"
 import { logger } from "../log"
@@ -17,6 +19,38 @@ import { VeniceClient } from "../venice"
 import { state } from "../state"
 
 const SPECIALIST_KINDS = ["concept", "image", "voice", "music", "video"] as const
+
+const CONCEPT_SYSTEM = `You are a creative director. Given a creative brief, return ONLY a JSON object with:
+hook (one sentence), scenes (array of objects with description and voiceLine), musicPrompt (one phrase), brand { name, palette: array of 3 hex colors }.
+Keep scene descriptions vivid and cinematic. Output JSON only, no prose.`
+
+function normalizeVeniceBody(kind: SpecialistKind, raw: unknown): unknown {
+  const r = (raw ?? {}) as { prompt?: string; durationSeconds?: number; voice?: string }
+  if (r && typeof r === "object" && "model" in (r as Record<string, unknown>)) return raw
+  const prompt = (r.prompt ?? "").toString().trim()
+  switch (kind) {
+    case "concept":
+      return {
+        model: FIXED_MODELS.concept,
+        messages: [
+          { role: "system", content: CONCEPT_SYSTEM },
+          { role: "user", content: prompt || "A short brand film." },
+        ],
+        max_tokens: 1200,
+        temperature: 0.8,
+      }
+    case "image":
+      return { model: FIXED_MODELS.image, prompt: prompt || "cinematic brass-lit product hero shot", width: 1024, height: 1024 }
+    case "voice":
+      return { model: FIXED_MODELS.voice, input: prompt || "Marque.", voice: r.voice ?? DEFAULT_VOICE }
+    case "music":
+      return { model: FIXED_MODELS.music, prompt: prompt || "moody cinematic ambient soundtrack" }
+    case "video":
+      return { model: "seedance-1-5-pro", prompt: prompt || "cinematic brand film", duration: "5", resolution: "480p", aspect_ratio: "16:9" }
+    default:
+      return raw
+  }
+}
 
 const HEX_BYTES = /^0x[a-fA-F0-9]*$/
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
@@ -263,7 +297,7 @@ brokerRoute.post("/venice/:specialistKind", async (c) => {
 
   const veniceResult = await ctx.venice.call({
     endpoint: veniceEndpoint,
-    body: requestBody,
+    body: normalizeVeniceBody(kindParam, requestBody),
     priceAtoms: BigInt(envelope.amountAtoms),
   })
 

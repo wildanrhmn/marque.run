@@ -98,11 +98,7 @@ async function main() {
   }
   const xPayment = Buffer.from(JSON.stringify(envelope)).toString("base64")
 
-  const body = {
-    model: "qwen3-235b-a22b-instruct-2507",
-    messages: [{ role: "user", content: "Reply with the single word: ONLINE" }],
-    max_tokens: 16,
-  }
+  const body = { prompt: "30s ad for a cold brew brand called Lichen, moody indie tone", durationSeconds: 30 }
 
   console.log("posting to broker /broker/venice/concept ...")
   const res = await fetch(`${BROKER_URL}/broker/venice/concept`, {
