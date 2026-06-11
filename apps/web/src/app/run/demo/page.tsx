@@ -29,6 +29,7 @@ import { sessionUsdcBalance, type SessionBudget } from "@/lib/smartaccount"
 import { brokerCall } from "@/lib/broker"
 import { generateBriefId } from "@/lib/briefId"
 import { useStudio } from "@/lib/studio"
+import { mintToCollection, urlToBase64 } from "@/lib/collect"
 
 type Stage = "compose" | "generating" | "result"
 
@@ -396,12 +397,38 @@ export default function RunDemoPage() {
     if (saved) return
     setSaving(true)
     push("mint.tx.submitted", {})
-    await sleep(1100)
-    const h = randHex(32)
-    setTx(h)
-    push("mint.tx.confirmed", { hash: h }, undefined)
-    setSaved(true)
-    setSaving(false)
+    if (!live) {
+      await sleep(1100)
+      const h = randHex(32)
+      setTx(h)
+      push("mint.tx.confirmed", { hash: h }, undefined)
+      setSaved(true)
+      setSaving(false)
+      return
+    }
+    setMandateError(null)
+    try {
+      if (!videoUrl || !account.address) throw new Error("nothing to save yet")
+      const { base64, contentType } = await urlToBase64(videoUrl)
+      const result = await mintToCollection({
+        recipient: account.address,
+        contentType: contentType || mediaType,
+        base64,
+        name: `${title} · ${tpl.label}`,
+        description: prompt.trim(),
+        template,
+        briefId: briefId.current,
+        spentUsd: actualSpent,
+        settlementHashes: settlementsRef.current,
+      })
+      setTx(result.txHash)
+      push("mint.tx.confirmed", { hash: result.txHash }, undefined)
+      setSaved(true)
+    } catch (err) {
+      setMandateError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const startOver = () => {

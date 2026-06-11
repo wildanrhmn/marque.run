@@ -25,6 +25,7 @@ const Schema = z.object({
   PINATA_JWT: z.string().optional(),
   PINATA_GATEWAY: z.string().optional(),
   PINATA_GATEWAY_TOKEN: z.string().optional(),
+  MARQUE_PIECE_ADDRESS: AddressSchema.optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 })
 

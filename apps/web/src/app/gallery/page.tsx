@@ -11,7 +11,7 @@ import { PieceModal } from "@/components/PieceModal"
 import { adPoster } from "@/lib/poster"
 import { shortTx } from "@/lib/format"
 import { cn } from "@/lib/cn"
-import { fetchPieces, DUMMY_PIECES, type Piece, type MediaKind } from "@/lib/gallery"
+import { fetchPieces, type Piece, type MediaKind } from "@/lib/gallery"
 
 type Filter = "all" | MediaKind
 
@@ -38,11 +38,10 @@ export default function GalleryPage() {
     setLoading(true)
     fetchPieces(account.address)
       .then((real) => {
-        if (cancelled) return
-        setPieces([...real, ...DUMMY_PIECES])
+        if (!cancelled) setPieces(real)
       })
       .catch(() => {
-        if (!cancelled) setPieces([...DUMMY_PIECES])
+        if (!cancelled) setPieces([])
       })
       .finally(() => !cancelled && setLoading(false))
     return () => {

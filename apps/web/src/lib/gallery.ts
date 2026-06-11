@@ -68,34 +68,6 @@ const client = createPublicClient({
   transport: http(publicEnv.NEXT_PUBLIC_BASE_RPC_URL),
 })
 
-export const DUMMY_PIECES: Piece[] = [
-  {
-    tokenId: 0,
-    title: "Aurelia Cold Brew",
-    description:
-      "A 15 second launch spot with brass-lit hero pours and a moody indie tempo, scored end to end.",
-    kind: "video",
-    mediaUrl: ipfsToHttp("ipfs://bafybeiged6fuymnxymwdmld73qnomev6vg4f5dmuruhp2luj4pre7olegy"),
-    posterUrl: "",
-    spendUsd: "1.92",
-    template: "ad",
-    mintedDate: "2026-06-11",
-    sample: true,
-  },
-  {
-    tokenId: 0,
-    title: "Lumen Metals",
-    description: "Studio macro image set, matte brass on black velvet, four variations.",
-    kind: "image",
-    mediaUrl: ipfsToHttp("ipfs://bafybeiftbmvk5y656d7y77ef55aymo7uasfmar3lhawdrfyydseyshsdku"),
-    posterUrl: ipfsToHttp("ipfs://bafybeiftbmvk5y656d7y77ef55aymo7uasfmar3lhawdrfyydseyshsdku"),
-    spendUsd: "0.20",
-    template: "images",
-    mintedDate: "2026-06-11",
-    sample: true,
-  },
-]
-
 export async function fetchPieces(owner: Address): Promise<Piece[]> {
   const contract = publicEnv.NEXT_PUBLIC_MINT_CONTRACT as Address
   if (contract === "0x0000000000000000000000000000000000000000") return []
