@@ -101,10 +101,22 @@ export default function RunDemoPage() {
   }, [quality])
   const est = estimateJob({ template, tier: quality, resolution, durationSec: duration })
 
+  const mediaStep: SpecialistKind = tpl.steps.image
+    ? "image"
+    : tpl.steps.voice
+      ? "voice"
+      : tpl.steps.music
+        ? "music"
+        : "image"
+  const runStepKeys: SpecialistKind[] = ["concept", mediaStep]
+  const shownSteps = STEPS.filter((s) => runStepKeys.includes(s.key))
+  const liveEst = runStepKeys.length * 0.12
+
   const [stepIndex, setStepIndex] = useState(-1)
   const [statusLine, setStatusLine] = useState("Approving your budget")
   const [events, setEvents] = useState<AgentTimelineEvent[]>([])
   const [showDetails, setShowDetails] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
 
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -173,7 +185,7 @@ export default function RunDemoPage() {
     try {
       const s = await studio.ensureSession()
       const bal = await sessionUsdcBalance(s.address)
-      const estAtoms = BigInt(Math.floor(est.total * 1_000_000))
+      const estAtoms = BigInt(Math.floor(liveEst * 1_000_000))
       if (bal <= estAtoms) {
         studio.openManage()
         return
@@ -181,7 +193,7 @@ export default function RunDemoPage() {
       const b = await studio.ensureBudget()
       resetForRun()
       setStage("generating")
-      await generateChain(b)
+      await generateChain(b, bal)
     } catch (err) {
       setMandateError((err as Error).message)
     } finally {
@@ -194,37 +206,37 @@ export default function RunDemoPage() {
     push("operator.root.delegation.signed", { cap: "$5.00" })
     await sleep(1100)
     if (cancel.current) return
-    push("director.plan.ready", { specialists: STEPS.length })
+    push("director.plan.ready", { specialists: shownSteps.length })
 
-    for (let i = 0; i < STEPS.length; i++) {
+    for (let i = 0; i < shownSteps.length; i++) {
       if (cancel.current) return
       setStepIndex(i)
-      setStatusLine(STEPS[i]!.label)
+      setStatusLine(shownSteps[i]!.label)
       const settle = randHex(32)
-      push("specialist.venice.request", {}, STEPS[i]!.key)
-      push("broker.relay.submitted", { hash: settle }, STEPS[i]!.key)
+      push("specialist.venice.request", {}, shownSteps[i]!.key)
+      push("broker.relay.submitted", { hash: settle }, shownSteps[i]!.key)
       await sleep(1300)
-      push("broker.relay.confirmed", { hash: settle }, STEPS[i]!.key)
-      push("specialist.venice.response", { settlementHash: settle }, STEPS[i]!.key)
+      push("broker.relay.confirmed", { hash: settle }, shownSteps[i]!.key)
+      push("specialist.venice.response", { settlementHash: settle }, shownSteps[i]!.key)
     }
     if (cancel.current) return
-    setStepIndex(STEPS.length)
+    setStepIndex(shownSteps.length)
     setStatusLine("Done")
     push("composer.final.encoded", { durationMs: duration * 1000 })
     await sleep(700)
     setStage("result")
   }
 
-  const generateChain = async (b: SessionBudget) => {
+  const generateChain = async (b: SessionBudget, balBefore: bigint) => {
     const id = generateBriefId({ operator: b.smartAccountAddress, prompt: prompt.trim() })
     briefId.current = id
     const amount = 100_000n // $0.10 per agent step
     let auth = b.authorization
     const call = async (kind: SpecialistKind, body: unknown): Promise<unknown> => {
-      const idx = STEPS.findIndex((s) => s.key === kind)
+      const idx = shownSteps.findIndex((s) => s.key === kind)
       if (idx >= 0) {
         setStepIndex(idx)
-        setStatusLine(STEPS[idx]!.label)
+        setStatusLine(shownSteps[idx]!.label)
       }
       push("specialist.venice.request", {}, kind)
       const res = await brokerCall<unknown>({
@@ -270,13 +282,15 @@ export default function RunDemoPage() {
         }
       }
       if (cancel.current) return
-      setStepIndex(STEPS.length)
+      setStepIndex(shownSteps.length)
       setStatusLine("Done")
       if (url) {
         setVideoUrl(url)
         setMediaType(type)
       }
-      setActualSpent(Number(((settlementsRef.current.length * Number(amount)) / 1e6).toFixed(2)))
+      const balAfter = await sessionUsdcBalance(b.smartAccountAddress)
+      const spent = Number(balBefore - balAfter) / 1e6
+      setActualSpent(Number((spent > 0 ? spent : 0).toFixed(2)))
       await studio.refresh()
       setStage("result")
     } catch (err) {
@@ -400,6 +414,33 @@ export default function RunDemoPage() {
     setShowDetails(false)
   }
 
+  const download = async () => {
+    if (!videoUrl) return
+    const ext = mediaType.includes("image")
+      ? "webp"
+      : mediaType.includes("mpeg") || mediaType.includes("mp3")
+        ? "mp3"
+        : mediaType.includes("audio")
+          ? "wav"
+          : mediaType.includes("video")
+            ? "mp4"
+            : "bin"
+    try {
+      const res = await fetch(videoUrl)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "marque"}.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(videoUrl, "_blank", "noopener")
+    }
+  }
+
   const title = titleFrom(prompt)
 
   return (
@@ -446,6 +487,33 @@ export default function RunDemoPage() {
           <span className="px-1 text-[10px] text-live">real Venice · ~3 min</span>
         )}
       </div>
+
+      <AnimatePresence>
+        {lightbox && videoUrl ? (
+          <motion.div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <button aria-label="Close" className="absolute inset-0 bg-ink-950/85 backdrop-blur-xl" onClick={() => setLightbox(false)} />
+            <motion.img
+              src={videoUrl}
+              alt={title}
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.97, opacity: 0 }}
+              className="relative z-10 max-h-[88vh] max-w-full rounded-xl object-contain shadow-2xl"
+            />
+            <button
+              onClick={() => setLightbox(false)}
+              className="absolute right-4 top-4 z-20 grid h-9 w-9 place-items-center rounded-full border border-bone/15 bg-ink-950/60 text-bone/80 backdrop-blur transition hover:text-bone"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <main className="relative mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 pb-16 pt-28">
         <AnimatePresence mode="wait">
@@ -593,7 +661,7 @@ export default function RunDemoPage() {
                     ? "preparing…"
                     : live && !account.isConnected
                       ? "Connect wallet to make it"
-                      : `Make it · ~$${est.total.toFixed(2)}`}
+                      : `Make it · ~$${(live ? liveEst : est.total).toFixed(2)}`}
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M13 6l6 6-6 6" />
                   </svg>
@@ -629,33 +697,56 @@ export default function RunDemoPage() {
                 <p className="mx-auto mt-2 max-w-md text-[13px] italic text-bone/50">“{prompt}”</p>
               </div>
 
-              <div className="panel p-6">
-                <ol className="space-y-1">
-                  {STEPS.map((s, i) => {
-                    const state = stepIndex > i || stepIndex >= STEPS.length ? "done" : stepIndex === i ? "active" : "pending"
+              <div className="panel relative overflow-hidden p-5">
+                <motion.div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brass/60 to-transparent"
+                  animate={{ x: ["-100%", "100%"] }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }}
+                />
+                <ol className="space-y-2">
+                  {shownSteps.map((s, i) => {
+                    const state = stepIndex > i || stepIndex >= shownSteps.length ? "done" : stepIndex === i ? "active" : "pending"
                     return (
-                      <li key={s.key} className="flex items-center gap-4 rounded-xl px-2 py-3">
+                      <motion.li
+                        key={s.key}
+                        layout
+                        className={cn(
+                          "flex items-center gap-4 rounded-xl border px-3 py-3 transition-colors duration-300",
+                          state === "active"
+                            ? "border-live/30 bg-live/[0.06]"
+                            : state === "done"
+                              ? "border-brass/15 bg-brass/[0.04]"
+                              : "border-transparent",
+                        )}
+                      >
                         <StepDot state={state} />
                         <div className="min-w-0 flex-1">
-                          <div className={cn("text-[15px] font-medium", state === "pending" ? "text-slate-dim" : "text-bone")}>
+                          <div className={cn("text-[15px] font-medium transition-colors", state === "pending" ? "text-slate-dim" : "text-bone")}>
                             {s.label}
                           </div>
                           <div className="text-[12px] text-slate-dim">{s.sub}</div>
                         </div>
                         {state === "done" ? (
-                          <span className="text-[11px] uppercase tracking-[0.14em] text-brass">Done</span>
+                          <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-brass">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l4 4L19 6" /></svg>
+                            Settled
+                          </span>
                         ) : state === "active" ? (
-                          <span className="text-[11px] uppercase tracking-[0.14em] text-live">Working</span>
+                          <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-live">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-live shadow-glow-live" />
+                            Working
+                          </span>
                         ) : null}
-                      </li>
+                      </motion.li>
                     )
                   })}
                 </ol>
                 <div className="mt-4 h-1 overflow-hidden rounded-full bg-bone/[0.06]">
                   <motion.div
-                    className="h-full rounded-full bg-brass"
-                    animate={{ width: `${(Math.max(0, stepIndex) / STEPS.length) * 100}%` }}
-                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="h-full rounded-full bg-gradient-to-r from-brass to-brass-bright"
+                    animate={{ width: `${(Math.max(0, stepIndex) / shownSteps.length) * 100}%` }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
                   />
                 </div>
               </div>
@@ -693,7 +784,12 @@ export default function RunDemoPage() {
                   {videoUrl && mediaType.startsWith("video") ? (
                     <video src={videoUrl} className="h-full w-full object-cover" autoPlay loop controls playsInline />
                   ) : videoUrl && mediaType.startsWith("image") ? (
-                    <img src={videoUrl} alt={title} className="h-full w-full object-cover" />
+                    <button onClick={() => setLightbox(true)} className="group block h-full w-full" aria-label="Expand">
+                      <img src={videoUrl} alt={title} className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
+                      <span className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-ink-950/60 text-bone opacity-0 backdrop-blur transition group-hover:opacity-100">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                      </span>
+                    </button>
                   ) : videoUrl && mediaType.startsWith("audio") ? (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-6">
                       <img src={poster(title)} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
@@ -727,9 +823,11 @@ export default function RunDemoPage() {
                 <button className="btn-primary shine-host h-11 px-6" onClick={save} disabled={saving || saved}>
                   {saved ? "Saved to collection ✓" : saving ? "Saving…" : "Save to collection"}
                 </button>
-                <button className="btn-ghost h-11 px-6">Download</button>
+                <button className="btn-ghost h-11 px-6" onClick={download} disabled={!videoUrl}>
+                  Download
+                </button>
                 <button className="btn-ghost h-11 px-6" onClick={startOver}>
-                  New ad
+                  New one
                 </button>
               </div>
 

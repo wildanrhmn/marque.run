@@ -97,14 +97,28 @@ export function AgentTimeline({
                     </div>
                     {Object.keys(e.details).length > 0 ? (
                       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-slate">
-                        {Object.entries(e.details).map(([k, v]) => (
-                          <span key={k}>
-                            <span className="text-slate-dim">{k}</span>:{" "}
-                            <span className="text-bone/80">
-                              {typeof v === "string" && v.startsWith("0x") ? shortTx(v) : String(v)}
+                        {Object.entries(e.details).map(([k, v]) => {
+                          const isHash = typeof v === "string" && /^0x[0-9a-fA-F]{40,}$/.test(v)
+                          return (
+                            <span key={k}>
+                              <span className="text-slate-dim">{k}</span>:{" "}
+                              {isHash ? (
+                                <a
+                                  href={`https://basescan.org/${(v as string).length === 42 ? "address" : "tx"}/${v}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-live hover:underline"
+                                >
+                                  {shortTx(v as string)}
+                                </a>
+                              ) : (
+                                <span className="text-bone/80">
+                                  {typeof v === "string" && v.startsWith("0x") ? shortTx(v) : String(v)}
+                                </span>
+                              )}
                             </span>
-                          </span>
-                        ))}
+                          )
+                        })}
                       </div>
                     ) : null}
                   </div>
