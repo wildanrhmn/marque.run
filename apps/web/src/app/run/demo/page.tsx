@@ -1,16 +1,15 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { useAccount, useConnect, useWalletClient, useWriteContract } from "wagmi"
+import { useAccount, useConnect } from "wagmi"
 import type { AgentTimelineEvent, SpecialistKind } from "@marque/shared"
-import type { Address, Hex } from "viem"
-import type { PrivateKeyAccount } from "viem/accounts"
+import type { Hex } from "viem"
 import { Header } from "@/components/Header"
 import { AgentTimeline } from "@/components/AgentTimeline"
 import { GradientMesh } from "@/components/GradientMesh"
 import { Dropdown } from "@/components/Dropdown"
 import { cn } from "@/lib/cn"
-import { shortTx, shortAddress } from "@/lib/format"
+import { shortTx } from "@/lib/format"
 import {
   FORMATS,
   TONES,
@@ -26,28 +25,10 @@ import {
   type QualityTier,
 } from "@/lib/venice-demo"
 import { startGeneration, brokerStreamUrl } from "@/lib/generate"
-import { deriveSessionAccount } from "@/lib/identities"
-import {
-  buildSessionBudget,
-  sessionUsdcBalance,
-  usdcTransferCalldata,
-  waitForTx,
-  withdrawSession,
-  type SessionBudget,
-} from "@/lib/smartaccount"
+import { sessionUsdcBalance, type SessionBudget } from "@/lib/smartaccount"
 import { brokerCall } from "@/lib/broker"
 import { generateBriefId } from "@/lib/briefId"
-
-const USDC_BASE: Address = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-
-const TEMPLATE_SPECIALISTS: Record<TemplateKey, SpecialistKind[]> = {
-  ad: ["concept", "image", "voice", "music", "video"],
-  product: ["concept", "image", "video"],
-  explainer: ["concept", "image", "voice"],
-  music: ["concept", "music"],
-  voiceover: ["concept", "voice"],
-  images: ["concept", "image"],
-}
+import { useStudio } from "@/lib/studio"
 
 type Stage = "compose" | "generating" | "result"
 
@@ -152,84 +133,14 @@ export default function RunDemoPage() {
 
   const account = useAccount()
   const { connectors, connect } = useConnect()
-  const { data: walletClient } = useWalletClient()
-  const { writeContractAsync } = useWriteContract()
-  const [sessionAccount, setSessionAccount] = useState<PrivateKeyAccount | null>(null)
-  const [sessionBalance, setSessionBalance] = useState<bigint>(0n)
-  const [budget, setBudget] = useState<SessionBudget | null>(null)
-  const [mandateBusy, setMandateBusy] = useState<string | null>(null)
+  const studio = useStudio()
+  const [preparing, setPreparing] = useState(false)
   const [mandateError, setMandateError] = useState<string | null>(null)
-  const [depositOpen, setDepositOpen] = useState(false)
-  const [depositUsd, setDepositUsd] = useState(2)
   const settlementsRef = useRef<Hex[]>([])
-
-  const sessionAddress = sessionAccount?.address ?? null
-
-  const refreshBalance = async (addr: Address) => {
-    try {
-      setSessionBalance(await sessionUsdcBalance(addr))
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const ensureSession = async (): Promise<PrivateKeyAccount> => {
-    if (sessionAccount) return sessionAccount
-    if (!account.address || !walletClient) throw new Error("connect a wallet first")
-    const s = await deriveSessionAccount(account.address, (m) => walletClient.signMessage({ message: m }))
-    setSessionAccount(s)
-    await refreshBalance(s.address)
-    return s
-  }
 
   const handleConnect = () => {
     const mm = connectors.find((c) => c.id === "metaMask") ?? connectors[0]
     if (mm) connect({ connector: mm })
-  }
-
-  const deposit = async (usd: number) => {
-    if (!account.address || !walletClient) return
-    setMandateBusy("deposit")
-    setMandateError(null)
-    try {
-      const s = await ensureSession()
-      const atoms = BigInt(Math.floor(usd * 1_000_000))
-      const hash = await walletClient.sendTransaction({
-        account: account.address,
-        to: USDC_BASE,
-        data: usdcTransferCalldata(s.address, atoms),
-      })
-      await waitForTx(hash)
-      await refreshBalance(s.address)
-      setBudget(null)
-      setDepositOpen(false)
-    } catch (err) {
-      setMandateError((err as Error).message)
-    } finally {
-      setMandateBusy(null)
-    }
-  }
-
-  const ensureBudget = async (s: PrivateKeyAccount, bal: bigint): Promise<SessionBudget> => {
-    if (budget) return budget
-    const b = await buildSessionBudget({ session: s, budgetAtoms: bal })
-    setBudget(b)
-    return b
-  }
-
-  const handleWithdraw = async () => {
-    if (!sessionAccount || !account.address) return
-    setMandateBusy("withdraw")
-    setMandateError(null)
-    try {
-      await withdrawSession({ session: sessionAccount, to: account.address })
-      await refreshBalance(sessionAccount.address)
-      setBudget(null)
-    } catch (err) {
-      setMandateError((err as Error).message)
-    } finally {
-      setMandateBusy(null)
-    }
   }
 
   const resetForRun = () => {
@@ -258,24 +169,23 @@ export default function RunDemoPage() {
       return
     }
     setMandateError(null)
-    setMandateBusy("prepare")
+    setPreparing(true)
     try {
-      const s = await ensureSession()
+      const s = await studio.ensureSession()
       const bal = await sessionUsdcBalance(s.address)
-      setSessionBalance(bal)
       const estAtoms = BigInt(Math.floor(est.total * 1_000_000))
       if (bal <= estAtoms) {
-        setDepositOpen(true)
+        studio.openManage()
         return
       }
-      const b = await ensureBudget(s, bal)
+      const b = await studio.ensureBudget()
       resetForRun()
       setStage("generating")
       await generateChain(b)
     } catch (err) {
       setMandateError((err as Error).message)
     } finally {
-      setMandateBusy(null)
+      setPreparing(false)
     }
   }
 
@@ -335,7 +245,7 @@ export default function RunDemoPage() {
     }
     try {
       setStatusLine("Authorizing your budget")
-      push("operator.root.delegation.signed", { cap: `$${(Number(sessionBalance) / 1e6).toFixed(2)}` })
+      push("operator.root.delegation.signed", { cap: `$${studio.balanceUsd.toFixed(2)}` })
       await call("concept", { prompt: prompt.trim(), durationSeconds: duration })
       let url: string | undefined
       let type = "image/webp"
@@ -355,7 +265,7 @@ export default function RunDemoPage() {
         setMediaType(type)
       }
       setActualSpent(Number(((settlementsRef.current.length * Number(amount)) / 1e6).toFixed(2)))
-      await refreshBalance(b.smartAccountAddress)
+      await studio.refresh()
       setStage("result")
     } catch (err) {
       setStatusLine(`Failed: ${(err as Error).message}`)
@@ -487,83 +397,6 @@ export default function RunDemoPage() {
         <GradientMesh />
       </div>
 
-      {live ? (
-        <div className="fixed right-4 top-[72px] z-30 flex items-center gap-2 rounded-xl border border-bone/10 bg-ink-900/85 px-2.5 py-2 backdrop-blur">
-          {!account.isConnected ? (
-            <button className="btn-primary h-8 px-3 text-[12px]" onClick={handleConnect}>
-              Connect wallet
-            </button>
-          ) : !sessionAddress ? (
-            <button
-              className="btn-primary h-8 px-3 text-[12px]"
-              onClick={() => ensureSession().catch((e) => setMandateError((e as Error).message))}
-            >
-              Set up account
-            </button>
-          ) : (
-            <>
-              <div className="px-1.5">
-                <div className="text-[9px] uppercase tracking-[0.14em] text-slate-dim">Balance</div>
-                <div className="font-display text-sm font-semibold text-bone">
-                  ${(Number(sessionBalance) / 1e6).toFixed(2)}
-                </div>
-              </div>
-              <button
-                className="h-8 rounded-lg bg-white px-3 text-[12px] font-medium text-neutral-950 transition hover:bg-white/90 disabled:opacity-50"
-                onClick={() => setDepositOpen(true)}
-                disabled={mandateBusy !== null}
-              >
-                Deposit
-              </button>
-              <button
-                className="h-8 rounded-lg border border-bone/12 px-3 text-[12px] font-medium text-bone transition hover:border-brass/40 disabled:opacity-50"
-                onClick={handleWithdraw}
-                disabled={mandateBusy !== null || sessionBalance === 0n}
-              >
-                {mandateBusy === "withdraw" ? "…" : "Withdraw"}
-              </button>
-            </>
-          )}
-        </div>
-      ) : null}
-
-      {depositOpen ? (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <button aria-label="Close" className="absolute inset-0 bg-ink-950/80 backdrop-blur-xl" onClick={() => setDepositOpen(false)} />
-          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-bone/10 bg-ink-900/95 p-6 shadow-2xl">
-            <h2 className="font-display text-lg font-semibold text-bone">Deposit to your balance</h2>
-            <p className="mt-1 text-[12px] leading-relaxed text-bone/55">
-              Move USDC from your wallet into your Marque balance. The agents spend from it; withdraw the rest anytime.
-            </p>
-            <div className="mt-4 flex gap-2">
-              {[1, 2, 5, 10].map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setDepositUsd(a)}
-                  className={cn(
-                    "flex-1 rounded-lg border py-2 text-[13px] font-medium transition",
-                    depositUsd === a ? "border-brass/50 bg-brass/10 text-brass" : "border-bone/[0.08] text-bone/70 hover:border-brass/30",
-                  )}
-                >
-                  ${a}
-                </button>
-              ))}
-            </div>
-            <button
-              className="btn-primary shine-host mt-4 h-11 w-full"
-              onClick={() => deposit(depositUsd)}
-              disabled={mandateBusy === "deposit" || !walletClient}
-            >
-              {mandateBusy === "deposit" ? "depositing…" : `Deposit $${depositUsd.toFixed(2)}`}
-            </button>
-            {mandateError ? (
-              <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-center text-[11px] text-red-300">
-                {mandateError}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       {/* tiny demo control, unobtrusive */}
       <div className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-full border border-bone/10 bg-ink-900/80 px-2.5 py-1.5 backdrop-blur">
@@ -742,9 +575,9 @@ export default function RunDemoPage() {
                 <button
                   className="btn-primary shine-host h-12 w-full max-w-sm px-7 text-base"
                   onClick={generate}
-                  disabled={!prompt.trim() || mandateBusy === "prepare"}
+                  disabled={!prompt.trim() || preparing}
                 >
-                  {mandateBusy === "prepare"
+                  {preparing
                     ? "preparing…"
                     : live && !account.isConnected
                       ? "Connect wallet to make it"

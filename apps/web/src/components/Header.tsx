@@ -1,10 +1,11 @@
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useAccount, useBalance, useConnect, useDisconnect, useSwitchChain } from "wagmi"
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi"
 import { SealMark } from "./SealMark"
 import { shortAddress } from "@/lib/format"
 import { cn } from "@/lib/cn"
+import { useStudio } from "@/lib/studio"
 
 const BASE_CHAIN_ID = 8453
 
@@ -21,13 +22,6 @@ const NETWORK_NAMES: Record<number, string> = {
 function networkName(chainId?: number): string {
   if (!chainId) return "Unknown network"
   return NETWORK_NAMES[chainId] ?? "Unknown network"
-}
-
-function formatBalance(value?: { formatted: string; symbol: string }): string {
-  if (!value) return "—"
-  const n = parseFloat(value.formatted)
-  const shown = n === 0 ? "0" : n < 0.0001 ? "<0.0001" : n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")
-  return `${shown} ${value.symbol}`
 }
 
 const LANDING_NAV = [
@@ -68,7 +62,7 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
   const { connectors, connect, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const { switchChain, isPending: isSwitching } = useSwitchChain()
-  const { data: balance } = useBalance({ address: account.address })
+  const studio = useStudio()
   const metamask = connectors.find((c) => c.id === "metaMask") ?? connectors[0]
   const navItems = variant === "landing" ? LANDING_NAV : APP_NAV
   const onBase = account.chainId === BASE_CHAIN_ID
@@ -121,17 +115,35 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
                 {isSwitching ? "Switching…" : `${networkName(account.chainId)} · Switch to Base`}
               </button>
             )}
-            {onBase ? (
-              <span className="hidden h-9 items-center rounded-full border border-bone/[0.1] bg-bone/[0.03] px-3 font-mono text-xs text-bone/80 md:inline-flex">
-                {formatBalance(balance)}
-              </span>
+            {onBase && variant === "app" ? (
+              !studio.sessionAddress ? (
+                <button
+                  onClick={() => studio.ensureSession().catch(() => {})}
+                  className="inline-flex h-9 items-center rounded-full bg-white px-3.5 text-[12px] font-medium text-neutral-950 transition hover:bg-white/90"
+                >
+                  Set up account
+                </button>
+              ) : (
+                <button
+                  onClick={studio.openManage}
+                  className="group inline-flex h-9 items-center gap-2 rounded-full border border-brass/30 bg-brass/[0.07] px-3 transition hover:bg-brass/[0.14]"
+                >
+                  <span className="hidden text-[9px] font-semibold uppercase tracking-[0.14em] text-brass/70 sm:inline">
+                    Balance
+                  </span>
+                  <span className="font-display text-[13px] font-semibold text-bone">${studio.balanceUsd.toFixed(2)}</span>
+                  <span className="grid h-4 w-4 place-items-center rounded-full bg-brass/20 text-[12px] leading-none text-brass">
+                    +
+                  </span>
+                </button>
+              )
             ) : null}
             <button
               onClick={() => disconnect()}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-bone/[0.1] bg-bone/[0.03] px-3 transition-colors hover:border-brass/30"
             >
               <span className="h-2 w-2 rounded-full bg-live shadow-glow-live" />
-              <span className="font-mono text-xs text-bone/80">{shortAddress(account.address)}</span>
+              <span className="hidden font-mono text-xs text-bone/80 sm:inline">{shortAddress(account.address)}</span>
             </button>
           </>
         ) : (

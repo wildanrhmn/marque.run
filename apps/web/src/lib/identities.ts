@@ -37,6 +37,18 @@ export function getCachedSessionAccount(owner: Address): PrivateKeyAccount | nul
   return cache.get(owner.toLowerCase()) ?? null
 }
 
+export function loadCachedSessionAccount(owner: Address): PrivateKeyAccount | null {
+  const key = owner.toLowerCase()
+  const cached = cache.get(key)
+  if (cached) return cached
+  if (typeof window === "undefined") return null
+  const stored = window.localStorage.getItem(storageKey(owner))
+  if (!stored) return null
+  const account = privateKeyToAccount(stored as Hex)
+  cache.set(key, account)
+  return account
+}
+
 export function forgetSessionAccount(owner: Address): void {
   cache.delete(owner.toLowerCase())
   if (typeof window !== "undefined") window.localStorage.removeItem(storageKey(owner))

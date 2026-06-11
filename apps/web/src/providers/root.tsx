@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { WagmiProvider } from "wagmi"
 import { wagmiConfig } from "@/lib/wagmi"
 import { SmoothScroll } from "@/components/SmoothScroll"
+import { StudioProvider } from "@/lib/studio"
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -18,8 +19,10 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={client}>
-        <SmoothScroll />
-        {children}
+        <StudioProvider>
+          <SmoothScroll />
+          {children}
+        </StudioProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )
