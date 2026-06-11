@@ -91,7 +91,10 @@ export default function RunPage() {
 
   const refreshSessionBalance = async (addr: Address) => {
     try {
-      setSessionBalance(await sessionUsdcBalance(addr))
+      const bal = await sessionUsdcBalance(addr)
+      setSessionBalance(bal)
+      const usd = Number(bal) / 1_000_000
+      if (usd > 0) setBudgetUsdc(Math.min(5, usd))
     } catch {
       /* ignore */
     }
