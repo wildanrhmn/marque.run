@@ -1,4 +1,5 @@
 "use client"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useAccount } from "wagmi"
 import { Header } from "@/components/Header"
@@ -6,66 +7,64 @@ import { GradientMesh } from "@/components/GradientMesh"
 import { TiltCard } from "@/components/TiltCard"
 import { SealMark } from "@/components/SealMark"
 import { Reveal, RevealStagger, RevealItem } from "@/components/Reveal"
+import { PieceModal } from "@/components/PieceModal"
 import { adPoster } from "@/lib/poster"
 import { shortTx } from "@/lib/format"
+import { cn } from "@/lib/cn"
+import { fetchPieces, DUMMY_PIECES, type Piece, type MediaKind } from "@/lib/gallery"
 
-interface Ad {
-  id: number
-  title: string
-  brief: string
-  spendUsdc: string
-  durationS: number
-  mintedOn: string
-  tokenId: number
-  txHash: string
-}
+type Filter = "all" | MediaKind
 
-const MOCK_ADS: Ad[] = [
-  {
-    id: 1,
-    title: "Lichen Cold Brew",
-    brief: "30s ad for a cold brew brand called Lichen, moody indie tone",
-    spendUsdc: "2.00",
-    durationS: 30,
-    mintedOn: "2026-05-19",
-    tokenId: 4,
-    txHash: "0x9c1f4a7b2e8d05c63a1b4f80e2d9a3c6b5e7f10428d6c91aa3f0b7e2c4d6815ab",
-  },
-  {
-    id: 2,
-    title: "Wavelength DAW",
-    brief: "30s ad for an open-source DAW called Wavelength, retro arcade vibe",
-    spendUsdc: "2.50",
-    durationS: 35,
-    mintedOn: "2026-05-18",
-    tokenId: 3,
-    txHash: "0x3a91cf7e20bb4d6815aa2c9e0f1d83b7c4e62a55c7df47158725c0cc407b5382",
-  },
-  {
-    id: 3,
-    title: "Husk Vegan Jerky",
-    brief: "30s ad for a vegan jerky brand called Husk, gritty desert aesthetic",
-    spendUsdc: "1.75",
-    durationS: 30,
-    mintedOn: "2026-05-16",
-    tokenId: 2,
-    txHash: "0xc4e7b1f93aa0d2658c1e40b7d96f2a8b35e10c72b9d03e5c7a1b4f80e2d9a3c6",
-  },
-  {
-    id: 4,
-    title: "Anchor Savings",
-    brief: "30s ad for a neobank called Anchor, calm and trustworthy",
-    spendUsdc: "2.25",
-    durationS: 30,
-    mintedOn: "2026-05-14",
-    tokenId: 1,
-    txHash: "0x52b68e5580726e648ac64c459528ac698cbd7e3168071b4e56f746313528a669",
-  },
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "video", label: "Video" },
+  { id: "audio", label: "Audio" },
+  { id: "image", label: "Image" },
 ]
 
 export default function GalleryPage() {
   const account = useAccount()
-  const ads = account.isConnected ? MOCK_ADS : []
+  const [pieces, setPieces] = useState<Piece[]>([])
+  const [loading, setLoading] = useState(false)
+  const [filter, setFilter] = useState<Filter>("all")
+  const [selected, setSelected] = useState<Piece | null>(null)
+
+  useEffect(() => {
+    if (!account.isConnected || !account.address) {
+      setPieces([])
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    fetchPieces(account.address)
+      .then((real) => {
+        if (cancelled) return
+        setPieces([...real, ...DUMMY_PIECES])
+      })
+      .catch(() => {
+        if (!cancelled) setPieces([...DUMMY_PIECES])
+      })
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [account.isConnected, account.address])
+
+  const counts = useMemo(() => {
+    const c: Record<Filter, number> = { all: pieces.length, video: 0, audio: 0, image: 0 }
+    for (const p of pieces) c[p.kind]++
+    return c
+  }, [pieces])
+
+  const visible = useMemo(
+    () => (filter === "all" ? pieces : pieces.filter((p) => p.kind === filter)),
+    [pieces, filter],
+  )
+
+  const totalSpent = useMemo(
+    () => pieces.reduce((a, b) => a + Number(b.spendUsd), 0).toFixed(2),
+    [pieces],
+  )
 
   return (
     <>
@@ -78,11 +77,11 @@ export default function GalleryPage() {
           <div className="mb-10 flex flex-col gap-3">
             <span className="pill w-fit">your collection</span>
             <h1 className="font-display text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-              Everything your crews have made.
+              Everything you have made.
             </h1>
             <p className="max-w-2xl text-bone/60">
-              Each piece is an asset you hold, minted to your wallet with a full record of what was
-              made and what it cost.
+              Each piece is an asset you hold, minted to your wallet with its media pinned to IPFS and a
+              full record of what was made and what it cost.
             </p>
           </div>
         </Reveal>
@@ -92,63 +91,145 @@ export default function GalleryPage() {
             title="Connect to see your collection"
             body="Your minted pieces live in your wallet. Connect to load them here."
           />
-        ) : ads.length === 0 ? (
-          <EmptyState
-            title="Nothing minted yet"
-            body="Run a crew and mint the result, and it will show up here."
-            cta
-          />
         ) : (
           <>
-            <div className="mb-6 flex flex-wrap gap-3">
-              <Stat label="pieces" value={String(ads.length)} />
-              <Stat label="total spent" value={`$${ads.reduce((a, b) => a + Number(b.spendUsdc), 0).toFixed(2)}`} />
+            <div className="mb-6 flex flex-wrap items-center gap-3">
+              <Stat label="pieces" value={String(pieces.length)} />
+              <Stat label="total spent" value={`$${totalSpent}`} />
               <Stat label="wallet" value={shortTx(account.address ?? "")} mono />
             </div>
-            <RevealStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {ads.map((ad) => (
-                <RevealItem key={ad.id}>
-                  <TiltCard className="rounded-[14px]">
-                    <article className="panel h-full overflow-hidden">
-                      <div className="aspect-video w-full overflow-hidden border-b border-bone/[0.06]">
-                        <img src={adPoster(ad.title)} alt={ad.title} className="h-full w-full object-cover" />
-                      </div>
-                      <div className="p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-display text-base font-semibold text-bone">{ad.title}</h3>
-                          <span className="pill-brass shrink-0">#{ad.tokenId}</span>
-                        </div>
-                        <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-bone/55">
-                          {ad.brief}
-                        </p>
-                        <div className="mt-4 flex items-center justify-between border-t border-bone/[0.06] pt-3">
-                          <div className="flex gap-4 text-[11px]">
-                            <Meta label="spend" value={`$${ad.spendUsdc}`} />
-                            <Meta label="length" value={`${ad.durationS}s`} />
-                            <Meta label="minted" value={ad.mintedOn} />
-                          </div>
-                        </div>
-                        <a
-                          href={`https://basescan.org/tx/${ad.txHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-3 inline-flex items-center gap-1.5 font-mono text-[11px] text-live hover:underline"
-                        >
-                          {shortTx(ad.txHash)}
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M7 17 17 7M9 7h8v8" />
-                          </svg>
-                        </a>
-                      </div>
-                    </article>
-                  </TiltCard>
-                </RevealItem>
+
+            <div className="mb-6 flex flex-wrap gap-2">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-[12px] font-medium transition",
+                    filter === f.id
+                      ? "border-brass/40 bg-brass/15 text-brass"
+                      : "border-bone/[0.07] text-bone/60 hover:border-brass/30 hover:text-bone",
+                  )}
+                >
+                  {f.label}
+                  <span className="ml-1.5 text-[10px] opacity-60">{counts[f.id]}</span>
+                </button>
               ))}
-            </RevealStagger>
+            </div>
+
+            {loading && pieces.length === 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="panel h-64 animate-pulse opacity-40" />
+                ))}
+              </div>
+            ) : visible.length === 0 ? (
+              <EmptyState
+                title="Nothing here yet"
+                body="Run a crew and mint the result, and it will show up in your collection."
+                cta
+              />
+            ) : (
+              <RevealStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visible.map((piece, i) => (
+                  <RevealItem key={`${piece.tokenId}-${piece.title}-${i}`}>
+                    <PieceCard piece={piece} onClick={() => setSelected(piece)} />
+                  </RevealItem>
+                ))}
+              </RevealStagger>
+            )}
           </>
         )}
       </main>
+
+      <PieceModal piece={selected} onClose={() => setSelected(null)} />
     </>
+  )
+}
+
+function PieceCard({ piece, onClick }: { piece: Piece; onClick: () => void }) {
+  return (
+    <TiltCard className="rounded-[14px]">
+      <button onClick={onClick} className="block w-full text-left">
+        <article className="panel h-full overflow-hidden transition-colors hover:border-brass/25">
+          <div className="relative aspect-video w-full overflow-hidden border-b border-bone/[0.06] bg-black">
+            <Thumb piece={piece} />
+            <KindBadge kind={piece.kind} />
+            {piece.sample ? (
+              <span className="absolute right-2 top-2 rounded-md bg-ink-950/70 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-bone/60 backdrop-blur">
+                sample
+              </span>
+            ) : null}
+          </div>
+          <div className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="font-display text-base font-semibold text-bone">{piece.title}</h3>
+              {!piece.sample ? <span className="pill-brass shrink-0">#{piece.tokenId}</span> : null}
+            </div>
+            <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-bone/55">{piece.description}</p>
+            <div className="mt-4 flex items-center gap-4 border-t border-bone/[0.06] pt-3 text-[11px]">
+              <Meta label="spend" value={`$${piece.spendUsd}`} />
+              <Meta label="type" value={piece.template} />
+              {piece.mintedDate ? <Meta label="minted" value={piece.mintedDate} /> : null}
+            </div>
+          </div>
+        </article>
+      </button>
+    </TiltCard>
+  )
+}
+
+function Thumb({ piece }: { piece: Piece }) {
+  if (piece.kind === "image" && piece.posterUrl) {
+    return <img src={piece.posterUrl} alt={piece.title} className="h-full w-full object-cover" />
+  }
+  if (piece.kind === "video") {
+    if (piece.posterUrl) {
+      return (
+        <>
+          <img src={piece.posterUrl} alt={piece.title} className="h-full w-full object-cover" />
+          <PlayGlyph />
+        </>
+      )
+    }
+    return (
+      <>
+        <video src={piece.mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+        <PlayGlyph />
+      </>
+    )
+  }
+  if (piece.kind === "audio") {
+    return (
+      <div className="grid h-full w-full place-items-center bg-gradient-to-br from-brass/10 to-ink-950">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#c9a45c" strokeWidth="1.6" opacity="0.85">
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+      </div>
+    )
+  }
+  return <img src={adPoster(piece.title)} alt={piece.title} className="h-full w-full object-cover" />
+}
+
+function PlayGlyph() {
+  return (
+    <div className="pointer-events-none absolute inset-0 grid place-items-center">
+      <div className="grid h-12 w-12 place-items-center rounded-full border border-bone/20 bg-ink-950/50 backdrop-blur">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 text-bone">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+function KindBadge({ kind }: { kind: MediaKind }) {
+  return (
+    <span className="absolute left-2 top-2 rounded-md bg-ink-950/70 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-bone/70 backdrop-blur">
+      {kind}
+    </span>
   )
 }
 
@@ -182,7 +263,7 @@ function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="text-[9px] uppercase tracking-[0.12em] text-slate-dim">{label}</div>
-      <div className="font-mono text-[11px] text-bone/80">{value}</div>
+      <div className="font-mono text-[11px] capitalize text-bone/80">{value}</div>
     </div>
   )
 }
