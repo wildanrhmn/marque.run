@@ -305,6 +305,22 @@ export default function RunPage() {
                     <Row label="balance" value={`$${(Number(sessionBalance) / 1e6).toFixed(2)} USDC`} />
                     <Row label="budget" value={`$${budgetUsdc.toFixed(2)} USDC`} />
                   </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-slate-dim">
+                      <span className="uppercase tracking-[0.12em]">budget</span>
+                      <span className="data text-bone/80">${budgetUsdc.toFixed(2)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="5"
+                      step="0.25"
+                      value={budgetUsdc}
+                      onChange={(e) => setBudgetUsdc(Number(e.target.value))}
+                      disabled={!!grant || funding || granting}
+                      className="w-full accent-brass"
+                    />
+                  </div>
                   {!sessionAddress ? (
                     <button
                       className="btn-primary shine-host w-full"
