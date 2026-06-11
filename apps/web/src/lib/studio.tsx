@@ -51,6 +51,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
   const [depositUsd, setDepositUsd] = useState(2)
+  const [copied, setCopied] = useState(false)
+
+  const copyAddress = async () => {
+    if (!session) return
+    try {
+      await navigator.clipboard.writeText(session.address)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     if (!account.address || session) return
@@ -164,49 +176,69 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               initial={{ opacity: 0, scale: 0.97, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="relative z-10 w-full max-w-sm rounded-2xl border border-bone/10 bg-ink-900/95 p-7 shadow-2xl"
+              style={{ padding: "28px" }}
+              className="relative z-10 w-full max-w-sm rounded-2xl border border-bone/10 bg-ink-900/95 shadow-2xl"
             >
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-dim">Marque balance</div>
-              <div className="mt-1.5 font-display text-[40px] font-semibold leading-none text-bone">
+              <button
+                aria-label="Close"
+                onClick={() => setManageOpen(false)}
+                className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-bone/50 transition hover:bg-bone/[0.06] hover:text-bone"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-dim">Marque balance</div>
+              <div className="mt-1 font-display text-[44px] font-semibold leading-none text-bone">
                 ${(Number(balanceAtoms) / 1e6).toFixed(2)}
               </div>
-              <p className="mt-3 text-[12.5px] leading-relaxed text-bone/55">
-                Your balance pays the agents as they work. Top it up, and withdraw whatever you do not spend.
-              </p>
+
               {session ? (
-                <div className="mt-2 font-mono text-[11px] text-bone/35">studio · {shortAddress(session.address)}</div>
+                <button
+                  onClick={copyAddress}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full border border-bone/10 bg-bone/[0.03] px-3 py-1.5 font-mono text-[11px] text-bone/70 transition hover:border-brass/30 hover:text-bone"
+                >
+                  {shortAddress(session.address)}
+                  {copied ? (
+                    <span className="text-[10px] uppercase tracking-[0.1em] text-live">copied</span>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="11" height="11" rx="2" />
+                      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                    </svg>
+                  )}
+                </button>
               ) : null}
 
-              <div className="mt-6 border-t border-bone/[0.07] pt-6">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-dim">Add funds</div>
-                <div className="mt-3 grid grid-cols-4 gap-2.5">
-                  {[1, 2, 5, 10].map((a) => (
-                    <button
-                      key={a}
-                      onClick={() => setDepositUsd(a)}
-                      className={cn(
-                        "rounded-xl border py-2.5 text-[14px] font-semibold transition",
-                        depositUsd === a
-                          ? "border-brass/50 bg-brass/10 text-brass"
-                          : "border-bone/[0.08] text-bone/70 hover:border-brass/30 hover:text-bone",
-                      )}
-                    >
-                      ${a}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  className="btn-primary shine-host mt-4 h-12 w-full text-[14px]"
-                  onClick={() => deposit(depositUsd)}
-                  disabled={busy === "deposit" || !walletClient}
-                >
-                  {busy === "deposit" ? "Depositing…" : `Deposit $${depositUsd.toFixed(2)}`}
-                </button>
+              <div className="mt-6 grid grid-cols-4 gap-2.5">
+                {[1, 2, 5, 10].map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => setDepositUsd(a)}
+                    className={cn(
+                      "rounded-xl border py-2.5 text-[14px] font-semibold transition",
+                      depositUsd === a
+                        ? "border-brass/50 bg-brass/10 text-brass"
+                        : "border-bone/[0.08] text-bone/70 hover:border-brass/30 hover:text-bone",
+                    )}
+                  >
+                    ${a}
+                  </button>
+                ))}
               </div>
+
+              <button
+                className="btn-primary shine-host mt-4 h-12 w-full text-[14px]"
+                onClick={() => deposit(depositUsd)}
+                disabled={busy === "deposit" || !walletClient}
+              >
+                {busy === "deposit" ? "Depositing…" : `Deposit $${depositUsd.toFixed(2)}`}
+              </button>
 
               {balanceAtoms > 0n ? (
                 <button
-                  className="mt-3 flex h-12 w-full items-center justify-center rounded-xl border border-bone/12 text-[13.5px] font-medium text-bone/85 transition hover:border-brass/40 hover:text-bone disabled:opacity-50"
+                  className="mt-2.5 flex h-12 w-full items-center justify-center rounded-xl border border-bone/12 text-[13.5px] font-medium text-bone/85 transition hover:border-brass/40 hover:text-bone disabled:opacity-50"
                   onClick={withdraw}
                   disabled={busy === "withdraw"}
                 >
