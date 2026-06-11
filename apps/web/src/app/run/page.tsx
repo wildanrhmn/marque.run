@@ -16,6 +16,7 @@ import {
   sessionUsdcBalance,
   usdcTransferCalldata,
   waitForTx,
+  withdrawSession,
   type SessionBudget,
 } from "@/lib/smartaccount"
 import { runSwarm, type SwarmOutputs } from "@/lib/orchestrator"
@@ -56,6 +57,8 @@ export default function RunPage() {
   const [sessionAccount, setSessionAccount] = useState<PrivateKeyAccount | null>(null)
   const [sessionBalance, setSessionBalance] = useState<bigint>(0n)
   const [funding, setFunding] = useState(false)
+  const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawTx, setWithdrawTx] = useState<Hex | undefined>()
 
   const [grant, setGrant] = useState<SessionBudget | null>(null)
   const [granting, setGranting] = useState(false)
@@ -144,6 +147,21 @@ export default function RunPage() {
       setGrantError((err as Error).message)
     } finally {
       setFunding(false)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (!sessionAccount || !account.address) return
+    setWithdrawing(true)
+    setGrantError(null)
+    try {
+      const { hash } = await withdrawSession({ session: sessionAccount, to: account.address })
+      setWithdrawTx(hash)
+      await refreshSessionBalance(sessionAccount.address)
+    } catch (err) {
+      setGrantError((err as Error).message)
+    } finally {
+      setWithdrawing(false)
     }
   }
 
@@ -360,12 +378,40 @@ export default function RunPage() {
                   ) : null}
                 </div>
               ) : (
-                <div className="mt-3 flex items-center justify-between rounded-lg border border-live/25 bg-live/[0.06] px-3 py-2">
-                  <span className="flex items-center gap-2 text-[12px] text-live">
-                    <span className="h-1.5 w-1.5 rounded-full bg-live shadow-glow-live" />
-                    mandate active
-                  </span>
-                  <span className="data text-live/80">${budgetUsdc.toFixed(2)} cap</span>
+                <div className="mt-3 space-y-3">
+                  <div className="flex items-center justify-between rounded-lg border border-live/25 bg-live/[0.06] px-3 py-2">
+                    <span className="flex items-center gap-2 text-[12px] text-live">
+                      <span className="h-1.5 w-1.5 rounded-full bg-live shadow-glow-live" />
+                      mandate active
+                    </span>
+                    <span className="data text-live/80">${budgetUsdc.toFixed(2)} cap</span>
+                  </div>
+                  <div className="writ space-y-2 p-3 text-[12px]">
+                    <Row label="session" value={sessionAddress ? shortAddress(sessionAddress) : "-"} />
+                    <Row label="balance" value={`$${(Number(sessionBalance) / 1e6).toFixed(2)} USDC`} />
+                  </div>
+                  <button
+                    className="w-full rounded-lg border border-bone/10 bg-bone/[0.03] px-3 py-2 text-[12px] font-medium text-bone transition hover:border-brass/40 disabled:opacity-50"
+                    onClick={handleWithdraw}
+                    disabled={withdrawing || sessionBalance === 0n}
+                  >
+                    {withdrawing ? "withdrawing…" : "withdraw remaining to wallet"}
+                  </button>
+                  {withdrawTx ? (
+                    <a
+                      href={`https://basescan.org/tx/${withdrawTx}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-center font-mono text-[11px] text-live hover:underline"
+                    >
+                      withdrawn · {shortAddress(withdrawTx)}
+                    </a>
+                  ) : null}
+                  {grantError ? (
+                    <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[11px] text-red-300">
+                      {grantError}
+                    </p>
+                  ) : null}
                 </div>
               )}
             </div>

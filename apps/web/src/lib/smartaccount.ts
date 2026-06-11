@@ -5,6 +5,7 @@ import {
   erc20Abi,
   getAddress,
   http,
+  parseUnits,
   type Address,
   type Hex,
   type PrivateKeyAccount,
@@ -172,4 +173,87 @@ export function usdcTransferCalldata(to: Address, atoms: bigint): Hex {
 
 export async function waitForTx(hash: Hex): Promise<void> {
   await publicClient().waitForTransactionReceipt({ hash })
+}
+
+async function relayerRpc<T>(method: string, params: unknown): Promise<T> {
+  const res = await fetch(RELAYER_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  })
+  const json = (await res.json()) as { result?: T; error?: { message: string } }
+  if (json.error) throw new Error(json.error.message)
+  return json.result as T
+}
+
+export async function withdrawSession(args: {
+  session: PrivateKeyAccount
+  to: Address
+}): Promise<{ hash?: Hex; amount: bigint }> {
+  const environment = getSmartAccountsEnvironment(base.id)
+  const smartAccount = await toSessionSmartAccount(args.session)
+  const balance = await sessionUsdcBalance(args.session.address)
+
+  const caps = await relayerRpc<Record<string, { feeCollector: Address; targetAddress: Address; tokens: { address: Address; symbol?: string; decimals: number | string }[] }>>(
+    "relayer_getCapabilities",
+    [String(base.id)],
+  )
+  const chainCaps = caps[String(base.id)]!
+  const usdc = chainCaps.tokens.find((t) => t.symbol === "USDC")!
+  const decimals = Number(usdc.decimals)
+
+  const feeData = await relayerRpc<{ minFee: string; context?: string }>("relayer_getFeeData", {
+    chainId: String(base.id),
+    token: USDC_BASE,
+  })
+  const minFee = feeData.minFee.includes(".") ? parseUnits(feeData.minFee as `${number}`, decimals) : BigInt(feeData.minFee)
+  const feeAtoms = minFee * 2n
+  if (balance <= feeAtoms) throw new Error("session balance too low to cover the withdrawal fee")
+  const amount = balance - feeAtoms
+
+  const delegation = createDelegation({
+    to: chainCaps.targetAddress,
+    from: smartAccount.address,
+    environment: smartAccount.environment,
+    salt: bytesToHex(crypto.getRandomValues(new Uint8Array(32))) as Hex,
+    scope: { type: ScopeType.Erc20TransferAmount, tokenAddress: USDC_BASE as Hex, maxAmount: balance },
+  })
+  const signature = await smartAccount.signDelegation({ delegation })
+
+  let authorizationList: OperatorAuthorization[] | undefined
+  const client = publicClient()
+  const code = await client.getCode({ address: args.session.address })
+  const impl = environment.implementations.EIP7702StatelessDeleGatorImpl
+  if (!impl) throw new Error("EIP7702StatelessDeleGatorImpl not found")
+  if (!code || !code.toLowerCase().includes(impl.slice(2).toLowerCase())) {
+    const nonce = await client.getTransactionCount({ address: args.session.address, blockTag: "pending" })
+    const auth = await args.session.signAuthorization({ chainId: base.id, contractAddress: getAddress(impl), nonce })
+    authorizationList = [{ address: auth.address, chainId: auth.chainId, nonce: auth.nonce, r: auth.r, s: auth.s, yParity: auth.yParity ?? 0 }]
+  }
+
+  const taskId = await relayerRpc<string>("relayer_send7710Transaction", {
+    chainId: String(base.id),
+    context: feeData.context,
+    ...(authorizationList ? { authorizationList } : {}),
+    transactions: [
+      {
+        permissionContext: [toRelayerJson({ ...delegation, signature })],
+        executions: [
+          { target: USDC_BASE, value: "0", data: usdcTransferCalldata(chainCaps.feeCollector, feeAtoms) },
+          { target: USDC_BASE, value: "0", data: usdcTransferCalldata(args.to, amount) },
+        ],
+      },
+    ],
+  })
+
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 3000))
+    const s = await relayerRpc<{ status: number; receipt?: { transactionHash?: Hex }; message?: string }>(
+      "relayer_getStatus",
+      { id: taskId, logs: false },
+    )
+    if (s.receipt?.transactionHash) return { hash: s.receipt.transactionHash, amount }
+    if (s.status >= 400) throw new Error(`withdrawal failed: ${s.message ?? s.status}`)
+  }
+  return { amount }
 }
