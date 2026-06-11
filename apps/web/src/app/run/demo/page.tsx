@@ -1,14 +1,16 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
+import { useAccount, useConnect, useWalletClient, useWriteContract } from "wagmi"
 import type { AgentTimelineEvent, SpecialistKind } from "@marque/shared"
-import type { Hex } from "viem"
+import type { Address, Hex } from "viem"
+import type { PrivateKeyAccount } from "viem/accounts"
 import { Header } from "@/components/Header"
 import { AgentTimeline } from "@/components/AgentTimeline"
 import { GradientMesh } from "@/components/GradientMesh"
 import { Dropdown } from "@/components/Dropdown"
 import { cn } from "@/lib/cn"
-import { shortTx } from "@/lib/format"
+import { shortTx, shortAddress } from "@/lib/format"
 import {
   FORMATS,
   TONES,
@@ -24,6 +26,28 @@ import {
   type QualityTier,
 } from "@/lib/venice-demo"
 import { startGeneration, brokerStreamUrl } from "@/lib/generate"
+import { deriveSessionAccount } from "@/lib/identities"
+import {
+  buildSessionBudget,
+  sessionUsdcBalance,
+  usdcTransferCalldata,
+  waitForTx,
+  withdrawSession,
+  type SessionBudget,
+} from "@/lib/smartaccount"
+import { brokerCall } from "@/lib/broker"
+import { generateBriefId } from "@/lib/briefId"
+
+const USDC_BASE: Address = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+
+const TEMPLATE_SPECIALISTS: Record<TemplateKey, SpecialistKind[]> = {
+  ad: ["concept", "image", "voice", "music", "video"],
+  product: ["concept", "image", "video"],
+  explainer: ["concept", "image", "voice"],
+  music: ["concept", "music"],
+  voiceover: ["concept", "voice"],
+  images: ["concept", "image"],
+}
 
 type Stage = "compose" | "generating" | "result"
 
@@ -126,6 +150,94 @@ export default function RunDemoPage() {
   const push = (kind: AgentTimelineEvent["kind"], details: Record<string, unknown>, specialistKind?: SpecialistKind) =>
     setEvents((p) => [...p, { briefId: briefId.current, ts: Date.now(), kind, specialistKind, details }])
 
+  const account = useAccount()
+  const { connectors, connect } = useConnect()
+  const { data: walletClient } = useWalletClient()
+  const { writeContractAsync } = useWriteContract()
+  const [sessionAccount, setSessionAccount] = useState<PrivateKeyAccount | null>(null)
+  const [sessionBalance, setSessionBalance] = useState<bigint>(0n)
+  const [budget, setBudget] = useState<SessionBudget | null>(null)
+  const [mandateBusy, setMandateBusy] = useState<string | null>(null)
+  const [mandateError, setMandateError] = useState<string | null>(null)
+  const settlementsRef = useRef<Hex[]>([])
+
+  const fundUsd = Math.max(0.5, Number(est.total.toFixed(2)) + 0.2)
+  const fundAtoms = BigInt(Math.floor(fundUsd * 1_000_000))
+  const mandateReady = !!budget
+  const sessionAddress = sessionAccount?.address ?? null
+
+  const refreshBalance = async (addr: Address) => {
+    try {
+      setSessionBalance(await sessionUsdcBalance(addr))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const ensureSession = async (): Promise<PrivateKeyAccount> => {
+    if (sessionAccount) return sessionAccount
+    if (!account.address || !walletClient) throw new Error("connect a wallet first")
+    const s = await deriveSessionAccount(account.address, (m) => walletClient.signMessage({ message: m }))
+    setSessionAccount(s)
+    await refreshBalance(s.address)
+    return s
+  }
+
+  const handleConnect = () => {
+    const mm = connectors.find((c) => c.id === "metaMask") ?? connectors[0]
+    if (mm) connect({ connector: mm })
+  }
+
+  const handleFund = async () => {
+    if (!account.address || !walletClient) return
+    setMandateBusy("fund")
+    setMandateError(null)
+    try {
+      const s = await ensureSession()
+      const hash = await walletClient.sendTransaction({
+        account: account.address,
+        to: USDC_BASE,
+        data: usdcTransferCalldata(s.address, fundAtoms),
+      })
+      await waitForTx(hash)
+      await refreshBalance(s.address)
+    } catch (err) {
+      setMandateError((err as Error).message)
+    } finally {
+      setMandateBusy(null)
+    }
+  }
+
+  const handleAuthorize = async () => {
+    setMandateBusy("authorize")
+    setMandateError(null)
+    try {
+      const s = await ensureSession()
+      const bal = await sessionUsdcBalance(s.address)
+      const b = await buildSessionBudget({ session: s, budgetAtoms: bal })
+      setBudget(b)
+    } catch (err) {
+      setMandateError((err as Error).message)
+    } finally {
+      setMandateBusy(null)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (!sessionAccount || !account.address) return
+    setMandateBusy("withdraw")
+    setMandateError(null)
+    try {
+      await withdrawSession({ session: sessionAccount, to: account.address })
+      await refreshBalance(sessionAccount.address)
+      setBudget(null)
+    } catch (err) {
+      setMandateError((err as Error).message)
+    } finally {
+      setMandateBusy(null)
+    }
+  }
+
   const generate = async () => {
     if (!prompt.trim()) return
     cancel.current = false
@@ -137,8 +249,9 @@ export default function RunDemoPage() {
     setVideoUrl(undefined)
     setMediaType("video/mp4")
     setActualSpent(undefined)
+    settlementsRef.current = []
     setStage("generating")
-    if (live) await generateLive()
+    if (live) await generateChain()
     else await generateSimulated()
   }
 
@@ -166,6 +279,68 @@ export default function RunDemoPage() {
     push("composer.final.encoded", { durationMs: duration * 1000 })
     await sleep(700)
     setStage("result")
+  }
+
+  const generateChain = async () => {
+    if (!budget || !sessionAccount) {
+      setStatusLine("Approve your budget first")
+      setStage("compose")
+      return
+    }
+    const id = generateBriefId({ operator: sessionAccount.address, prompt: prompt.trim() })
+    briefId.current = id
+    const amount = 100_000n // $0.10 per agent step
+    let auth = budget.authorization
+    const call = async (kind: SpecialistKind, body: unknown): Promise<unknown> => {
+      const idx = STEPS.findIndex((s) => s.key === kind)
+      if (idx >= 0) {
+        setStepIndex(idx)
+        setStatusLine(STEPS[idx]!.label)
+      }
+      push("specialist.venice.request", {}, kind)
+      const res = await brokerCall<unknown>({
+        specialistKind: kind,
+        body,
+        amountAtoms: amount,
+        briefId: id,
+        delegations: budget.delegations,
+        authorization: auth,
+      })
+      auth = undefined
+      if (res.brokerSettlementTxHash) {
+        settlementsRef.current.push(res.brokerSettlementTxHash)
+        push("broker.relay.confirmed", { hash: res.brokerSettlementTxHash }, kind)
+      }
+      push("specialist.venice.response", { settlementHash: res.brokerSettlementTxHash }, kind)
+      return res.data
+    }
+    try {
+      setStatusLine("Authorizing your budget")
+      push("operator.root.delegation.signed", { cap: `$${(Number(sessionBalance) / 1e6).toFixed(2)}` })
+      await call("concept", { prompt: prompt.trim(), durationSeconds: duration })
+      let url: string | undefined
+      let type = "image/webp"
+      if (tpl.steps.image) {
+        const data = (await call("image", { prompt: prompt.trim() })) as { images?: string[] }
+        const b64 = data?.images?.[0]
+        if (b64) {
+          url = b64.startsWith("data:") ? b64 : `data:image/webp;base64,${b64}`
+          type = "image/webp"
+        }
+      }
+      if (cancel.current) return
+      setStepIndex(STEPS.length)
+      setStatusLine("Done")
+      if (url) {
+        setVideoUrl(url)
+        setMediaType(type)
+      }
+      setActualSpent(Number(((settlementsRef.current.length * Number(amount)) / 1e6).toFixed(2)))
+      await refreshBalance(sessionAccount.address)
+      setStage("result")
+    } catch (err) {
+      setStatusLine(`Failed: ${(err as Error).message}`)
+    }
   }
 
   const generateLive = async () => {
@@ -467,21 +642,62 @@ export default function RunDemoPage() {
               </div>
 
               <div className="mt-5 flex flex-col items-center gap-4">
-                <button
-                  className="btn-primary shine-host h-12 w-full max-w-sm px-7 text-base"
-                  onClick={generate}
-                  disabled={!prompt.trim()}
-                >
-                  Make it · ~${est.total.toFixed(2)}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
-                </button>
+                {live && !mandateReady ? (
+                  <div className="w-full max-w-sm space-y-2">
+                    {!account.isConnected ? (
+                      <button className="btn-primary shine-host h-12 w-full px-7 text-base" onClick={handleConnect}>
+                        connect wallet
+                      </button>
+                    ) : sessionBalance === 0n ? (
+                      <button
+                        className="btn-primary shine-host h-12 w-full px-7 text-base"
+                        onClick={handleFund}
+                        disabled={mandateBusy === "fund" || !walletClient}
+                      >
+                        {mandateBusy === "fund" ? "funding…" : `fund $${fundUsd.toFixed(2)} to your studio account`}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn-primary shine-host h-12 w-full px-7 text-base"
+                        onClick={handleAuthorize}
+                        disabled={mandateBusy === "authorize"}
+                      >
+                        {mandateBusy === "authorize" ? "authorizing…" : "authorize budget & continue"}
+                      </button>
+                    )}
+                    {account.isConnected ? (
+                      <p className="text-center text-[11px] text-slate-dim">
+                        studio account {sessionAddress ? shortAddress(sessionAddress) : "—"} · balance $
+                        {(Number(sessionBalance) / 1e6).toFixed(2)}
+                      </p>
+                    ) : null}
+                    {mandateError ? (
+                      <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-center text-[11px] text-red-300">
+                        {mandateError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <button
+                    className="btn-primary shine-host h-12 w-full max-w-sm px-7 text-base"
+                    onClick={generate}
+                    disabled={!prompt.trim()}
+                  >
+                    Make it · ~${est.total.toFixed(2)}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                )}
+                {live && mandateReady ? (
+                  <button onClick={handleWithdraw} disabled={mandateBusy === "withdraw"} className="text-[11px] text-slate-dim hover:text-bone">
+                    {mandateBusy === "withdraw" ? "withdrawing…" : "withdraw remaining balance to wallet"}
+                  </button>
+                ) : null}
                 <p className="max-w-md text-center text-[12px] text-slate-dim">
-                  Estimated ${est.total.toFixed(2)} in USDC
-                  {tpl.steps.video ? ` for a ${est.realDurationSec}s piece (${est.scenes} scenes)` : ""}.
-                  Each step's exact price is quoted before it runs, and the total can never exceed the
-                  budget you approve. Pay only for what you make.
+                  {live
+                    ? "Live mode settles every step on Base mainnet through your studio Smart Account. You only fund what you spend, and can withdraw the rest anytime."
+                    : `Estimated $${est.total.toFixed(2)} in USDC. Each step's exact price is quoted before it runs, and the total can never exceed the budget you approve. Pay only for what you make.`}
                 </p>
               </div>
             </motion.div>
