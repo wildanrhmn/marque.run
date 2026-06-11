@@ -1,13 +1,17 @@
 import type { Hex } from "viem"
+import type { TemplateKey, QualityTier } from "@marque/shared"
 import { publicEnv } from "./env"
 
 export interface GenerateRequest {
   prompt: string
+  template: TemplateKey
+  quality: QualityTier
   durationSec: number
   resolution: "480p" | "720p" | "1080p"
   aspectRatio: "16:9" | "9:16" | "1:1"
   tone?: string
-  maxScenes?: number
+  voice?: string
+  exactText?: boolean
 }
 
 export interface GenerateStarted {

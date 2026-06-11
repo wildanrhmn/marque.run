@@ -191,7 +191,7 @@ export class VeniceRestClient {
 export interface VideoArgs {
   model: string
   prompt: string
-  duration: "5s" | "10s"
+  duration: string
   resolution: string
   aspectRatio: string
   imageUrl?: string

@@ -5,6 +5,7 @@ import { composeAd } from "../compose"
 import { logger } from "../log"
 import { state } from "../state"
 import { storeAsset, storeJson } from "../asset-store"
+import { pinataEnabled, pinBuffer, pinJson } from "../pinata"
 import { loadEnv } from "../env"
 
 const SceneSchema = z.object({
@@ -64,13 +65,26 @@ composeRoute.post("/", async (c) => {
     const stored = await storeAsset({ data: result.mp4, contentType: "video/mp4" })
 
     const publicBase = env.ONESHOT_WEBHOOK_PUBLIC_BASE_URL.replace(/\/+$/, "")
-    const assetUrl = `${publicBase}/asset/${stored.filename}`
+    let assetUrl = `${publicBase}/asset/${stored.filename}`
+    let assetRef = assetUrl
+    let assetCid: string | undefined
+    if (pinataEnabled()) {
+      try {
+        const assetPin = await pinBuffer(result.mp4, stored.filename, "video/mp4")
+        assetCid = assetPin.cid
+        assetUrl = assetPin.gatewayUrl
+        assetRef = assetPin.ipfsUri
+        state.emit({ briefId, ts: Date.now(), kind: "broker.ipfs.pinned", details: { assetCid: assetPin.cid } })
+      } catch (err) {
+        logger.warn({ err: (err as Error).message }, "pinata pin failed, using vps urls")
+      }
+    }
 
     const metadata = {
-      name: `MARQUE ad ${briefId.slice(0, 10)}`,
+      name: `Marque Piece ${briefId.slice(0, 10)}`,
       description: body.prompt,
-      image: assetUrl,
-      animation_url: assetUrl,
+      image: assetRef,
+      animation_url: assetRef,
       external_url: `https://marque.run/runs/${briefId}`,
       attributes: [
         { trait_type: "operator", value: operator },
@@ -85,9 +99,25 @@ composeRoute.post("/", async (c) => {
         settlementHashes: body.settlementHashes ?? [],
       },
     }
-    const metaStored = await storeJson(`metadata-${briefId.slice(2, 14)}`, metadata)
-    const metadataFilename = metaStored.path.split("/").pop() ?? metaStored.path.split("\\").pop() ?? ""
-    const metadataUrl = `${publicBase}/asset/${metadataFilename}`
+
+    let metadataUrl: string
+    let tokenUri: string | undefined
+    let metadataCid: string | undefined
+    if (pinataEnabled() && assetCid) {
+      try {
+        const metaPin = await pinJson(metadata, `metadata-${briefId.slice(2, 14)}`)
+        metadataCid = metaPin.cid
+        metadataUrl = metaPin.gatewayUrl
+        tokenUri = metaPin.ipfsUri
+      } catch (err) {
+        logger.warn({ err: (err as Error).message }, "pinata metadata pin failed, using vps json")
+        const metaStored = await storeJson(`metadata-${briefId.slice(2, 14)}`, metadata)
+        metadataUrl = `${publicBase}/asset/${metaStored.path.split(/[\\/]/).pop()}`
+      }
+    } else {
+      const metaStored = await storeJson(`metadata-${briefId.slice(2, 14)}`, metadata)
+      metadataUrl = `${publicBase}/asset/${metaStored.path.split(/[\\/]/).pop()}`
+    }
 
     state.emit({
       briefId,
@@ -99,6 +129,7 @@ composeRoute.post("/", async (c) => {
         durationMs: result.durationMs,
         assetUrl,
         metadataUrl,
+        ...(tokenUri ? { tokenUri } : {}),
       },
     })
 
@@ -109,6 +140,9 @@ composeRoute.post("/", async (c) => {
       assetUrl,
       metadataUrl,
       contentType: "video/mp4",
+      ...(assetCid ? { assetCid } : {}),
+      ...(metadataCid ? { metadataCid } : {}),
+      ...(tokenUri ? { tokenUri } : {}),
     })
   } catch (err) {
     logger.error({ err }, "compose failed")

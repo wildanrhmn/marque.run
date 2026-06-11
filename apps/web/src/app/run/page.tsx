@@ -215,7 +215,7 @@ export default function RunPage() {
         briefId,
         totalSpendAtoms: BigInt(Math.floor(budgetUsdc * 1_000_000)),
         settlementTxHashes: settlementHashes.length > 0 ? settlementHashes : [briefId],
-        uri: composeResult.metadataUrl,
+        uri: composeResult.tokenUri ?? composeResult.metadataUrl,
       })
       const tx = await writeContractAsync({ address: contract, ...args })
       setMintTx(tx)

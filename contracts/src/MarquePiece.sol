@@ -4,7 +4,7 @@ pragma solidity 0.8.27;
 import {ERC721} from "openzeppelin/token/ERC721/ERC721.sol";
 import {Ownable} from "openzeppelin/access/Ownable.sol";
 
-contract MarqueAd is ERC721, Ownable {
+contract MarquePiece is ERC721, Ownable {
     struct Provenance {
         bytes32 briefId;
         address operator;
@@ -16,7 +16,7 @@ contract MarqueAd is ERC721, Ownable {
     uint256 public nextTokenId;
     mapping(uint256 => Provenance) public provenanceOf;
 
-    event AdMinted(
+    event PieceMinted(
         uint256 indexed tokenId,
         bytes32 indexed briefId,
         address indexed operator,
@@ -26,9 +26,9 @@ contract MarqueAd is ERC721, Ownable {
 
     error EmptyProvenance();
 
-    constructor(address initialOwner) ERC721("MARQUE Ad", "DRAD") Ownable(initialOwner) {}
+    constructor(address initialOwner) ERC721("Marque Piece", "MARQUE") Ownable(initialOwner) {}
 
-    function mintAd(
+    function mintPiece(
         address to,
         bytes32 briefId,
         uint96 totalSpendAtoms,
@@ -48,7 +48,7 @@ contract MarqueAd is ERC721, Ownable {
             ipfsUri: ipfsUri
         });
 
-        emit AdMinted(tokenId, briefId, to, totalSpendAtoms, ipfsUri);
+        emit PieceMinted(tokenId, briefId, to, totalSpendAtoms, ipfsUri);
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {

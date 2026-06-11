@@ -56,6 +56,7 @@ export interface AgentTimelineEvent {
     | "broker.relay.confirmed"
     | "specialist.venice.response"
     | "composer.scene.rendered"
+    | "broker.ipfs.pinned"
     | "composer.final.encoded"
     | "mint.tx.submitted"
     | "mint.tx.confirmed"

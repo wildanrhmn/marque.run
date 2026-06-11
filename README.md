@@ -76,7 +76,7 @@ cd contracts
 forge install OpenZeppelin/openzeppelin-contracts foundry-rs/forge-std --no-git
 forge build
 forge test
-DEPLOYER_PRIVATE_KEY=0x... forge script script/Deploy.s.sol:DeployMarqueAd \
+DEPLOYER_PRIVATE_KEY=0x... forge script script/Deploy.s.sol:DeployMarquePiece \
   --rpc-url https://mainnet.base.org --broadcast
 ```
 

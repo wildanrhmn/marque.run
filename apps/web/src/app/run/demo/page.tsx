@@ -6,12 +6,29 @@ import type { Hex } from "viem"
 import { Header } from "@/components/Header"
 import { AgentTimeline } from "@/components/AgentTimeline"
 import { GradientMesh } from "@/components/GradientMesh"
+import { Dropdown } from "@/components/Dropdown"
 import { cn } from "@/lib/cn"
 import { shortTx } from "@/lib/format"
-import { FORMATS, RESOLUTIONS, TONES, estimateAd, type Format, type Resolution } from "@/lib/venice-demo"
+import {
+  FORMATS,
+  TONES,
+  TEMPLATES,
+  VIDEO_TIERS,
+  VOICES,
+  DEFAULT_VOICE,
+  estimateJob,
+  resolutionFor,
+  type Format,
+  type Resolution,
+  type TemplateKey,
+  type QualityTier,
+} from "@/lib/venice-demo"
 import { startGeneration, brokerStreamUrl } from "@/lib/generate"
 
 type Stage = "compose" | "generating" | "result"
+
+const TEMPLATE_ORDER: TemplateKey[] = ["ad", "product", "explainer", "music", "voiceover", "images"]
+const TIER_ORDER: QualityTier[] = ["draft", "standard", "cinematic"]
 
 const SAMPLES = [
   "A moody, indie ad for a cold brew brand called Lichen",
@@ -61,14 +78,23 @@ function titleFrom(prompt: string): string {
 
 export default function RunDemoPage() {
   const [stage, setStage] = useState<Stage>("compose")
+  const [template, setTemplate] = useState<TemplateKey>("ad")
+  const [quality, setQuality] = useState<QualityTier>("draft")
   const [prompt, setPrompt] = useState("")
   const [duration, setDuration] = useState(30)
   const [format, setFormat] = useState<Format>(FORMATS[0])
   const [resolution, setResolution] = useState<Resolution>("720p")
   const [tone, setTone] = useState<string | null>(null)
+  const [voice, setVoice] = useState<string>(DEFAULT_VOICE)
+  const [exactText, setExactText] = useState(false)
   const [speed, setSpeed] = useState(1)
 
-  const est = estimateAd({ durationSec: duration, resolution })
+  const tpl = TEMPLATES[template]
+  const tierResolutions = VIDEO_TIERS[quality].resolutions
+  useEffect(() => {
+    setResolution((r) => resolutionFor(quality, r))
+  }, [quality])
+  const est = estimateJob({ template, tier: quality, resolution, durationSec: duration })
 
   const [stepIndex, setStepIndex] = useState(-1)
   const [statusLine, setStatusLine] = useState("Approving your budget")
@@ -80,6 +106,7 @@ export default function RunDemoPage() {
   const [tx, setTx] = useState<Hex | undefined>()
   const [live, setLive] = useState(false)
   const [videoUrl, setVideoUrl] = useState<string | undefined>()
+  const [mediaType, setMediaType] = useState<string>("video/mp4")
   const [actualSpent, setActualSpent] = useState<number | undefined>()
 
   const speedRef = useRef(speed)
@@ -108,6 +135,7 @@ export default function RunDemoPage() {
     setSaved(false)
     setTx(undefined)
     setVideoUrl(undefined)
+    setMediaType("video/mp4")
     setActualSpent(undefined)
     setStage("generating")
     if (live) await generateLive()
@@ -146,11 +174,14 @@ export default function RunDemoPage() {
     try {
       started = await startGeneration({
         prompt: prompt.trim(),
+        template,
+        quality,
         durationSec: duration,
         resolution,
         aspectRatio: format.key,
         tone: tone ?? undefined,
-        maxScenes: est.scenes,
+        voice: tpl.steps.voice ? voice : undefined,
+        exactText: template === "voiceover" ? exactText : undefined,
       })
     } catch (err) {
       setStatusLine(`Failed: ${(err as Error).message}`)
@@ -179,10 +210,12 @@ export default function RunDemoPage() {
         applyLiveEvent(ev)
         if (ev.kind === "composer.final.encoded") {
           const url = (ev.details["assetUrl"] as string | undefined) ?? undefined
+          const ct = (ev.details["contentType"] as string | undefined) ?? "video/mp4"
           const spent = ev.details["spentUsd"] as number | undefined
           setStepIndex(STEPS.length)
           setStatusLine("Done")
           if (url) setVideoUrl(url)
+          setMediaType(ct)
           if (typeof spent === "number") setActualSpent(spent)
           setStage("result")
           finish()
@@ -308,67 +341,129 @@ export default function RunDemoPage() {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="mb-7 text-center">
-                <span className="pill-brass">New ad</span>
+                <span className="pill-brass">Every premium model · one budget</span>
                 <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-bone sm:text-4xl">
-                  What are you advertising?
+                  What should we make?
                 </h1>
                 <p className="mx-auto mt-2 max-w-md text-bone/55">
-                  Describe it in a sentence. A crew of agents writes, designs, voices, scores, and
-                  edits a finished ad for you.
+                  Pick a type, describe it, set a budget. A crew of agents picks the best model for
+                  each part and you only pay for what it makes. No subscription.
                 </p>
+              </div>
+
+              <div className="mb-4 flex flex-wrap justify-center gap-2">
+                {TEMPLATE_ORDER.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTemplate(t)}
+                    className={cn(
+                      "rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition",
+                      template === t
+                        ? "border-brass/50 bg-brass/10 text-brass"
+                        : "border-bone/[0.08] text-slate hover:border-brass/30 hover:text-bone",
+                    )}
+                  >
+                    {TEMPLATES[t].label}
+                  </button>
+                ))}
               </div>
 
               <div className="panel p-5">
                 <textarea
                   autoFocus
-                  className="field min-h-[120px] resize-none border-0 bg-transparent px-1 text-base focus:ring-0"
-                  placeholder="e.g. A moody, cinematic ad for a cold brew brand called Lichen…"
+                  className="field min-h-[110px] resize-none border-0 bg-transparent px-1 text-base focus:ring-0"
+                  placeholder={
+                    template === "voiceover" && exactText
+                      ? "Paste the exact words you want narrated…"
+                      : `e.g. ${tpl.placeholder}`
+                  }
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                 />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {SAMPLES.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setPrompt(s)}
-                      className="rounded-full border border-bone/[0.08] px-3 py-1 text-[12px] text-slate transition hover:border-brass/30 hover:text-bone"
-                    >
-                      {s.length > 40 ? s.slice(0, 40) + "…" : s}
-                    </button>
-                  ))}
+                <div className="mt-1 text-[12px] text-slate-dim">{tpl.tagline}</div>
+
+                <div className="mt-5 flex flex-wrap items-end gap-x-5 gap-y-3 border-t border-bone/[0.06] pt-4">
+                  {tpl.steps.video ? (
+                    <Field label="Length">
+                      <Segmented
+                        options={DURATIONS.map((d) => ({ key: String(d), label: `${d}s` }))}
+                        value={String(duration)}
+                        onChange={(v) => setDuration(Number(v))}
+                      />
+                    </Field>
+                  ) : null}
+                  {tpl.steps.video || tpl.steps.image ? (
+                    <Field label="Format">
+                      <Segmented
+                        options={FORMATS.map((f) => ({ key: f.key, label: f.key }))}
+                        value={format.key}
+                        onChange={(v) => setFormat(FORMATS.find((f) => f.key === v) ?? FORMATS[0])}
+                      />
+                    </Field>
+                  ) : null}
+                  {tpl.steps.video ? (
+                    <>
+                      <Field label="Resolution">
+                        <Segmented
+                          options={tierResolutions.map((r) => ({ key: r, label: r }))}
+                          value={resolution}
+                          onChange={(v) => setResolution(v as Resolution)}
+                        />
+                      </Field>
+                      <Field label="Quality">
+                        <Segmented
+                          options={TIER_ORDER.map((t) => ({ key: t, label: VIDEO_TIERS[t].label }))}
+                          value={quality}
+                          onChange={(v) => setQuality(v as QualityTier)}
+                        />
+                      </Field>
+                    </>
+                  ) : null}
+                  {tpl.steps.voice ? (
+                    <Field label="Voice">
+                      <Dropdown
+                        value={voice}
+                        options={VOICES.map((vo) => ({ id: vo.id, label: vo.label }))}
+                        onChange={setVoice}
+                        width={140}
+                      />
+                    </Field>
+                  ) : null}
+                  {tpl.steps.image || tpl.steps.video ? (
+                    <Field label="Tone">
+                      <Segmented
+                        options={[{ key: "", label: "Auto" }, ...TONES.map((t) => ({ key: t, label: t }))]}
+                        value={tone ?? ""}
+                        onChange={(v) => setTone(v === "" ? null : v)}
+                      />
+                    </Field>
+                  ) : null}
                 </div>
 
-                <div className="mt-5 grid gap-4 border-t border-bone/[0.06] pt-5 sm:grid-cols-2 lg:grid-cols-4">
-                  <Field label={`Length · ${est.scenes} scenes`}>
-                    <Segmented
-                      options={DURATIONS.map((d) => ({ key: String(d), label: `${d}s` }))}
-                      value={String(duration)}
-                      onChange={(v) => setDuration(Number(v))}
-                    />
-                  </Field>
-                  <Field label="Format">
-                    <Segmented
-                      options={FORMATS.map((f) => ({ key: f.key, label: f.key }))}
-                      value={format.key}
-                      onChange={(v) => setFormat(FORMATS.find((f) => f.key === v) ?? FORMATS[0])}
-                    />
-                  </Field>
-                  <Field label="Quality">
-                    <Segmented
-                      options={RESOLUTIONS.map((r) => ({ key: r, label: r }))}
-                      value={resolution}
-                      onChange={(v) => setResolution(v as Resolution)}
-                    />
-                  </Field>
-                  <Field label="Tone">
-                    <Segmented
-                      options={TONES.map((t) => ({ key: t, label: t }))}
-                      value={tone ?? ""}
-                      onChange={(v) => setTone(v === tone ? null : v)}
-                      compact
-                    />
-                  </Field>
-                </div>
+                {template === "voiceover" ? (
+                  <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-[12px] text-bone/70">
+                    <button
+                      type="button"
+                      onClick={() => setExactText((v) => !v)}
+                      className={cn(
+                        "relative h-5 w-9 rounded-full transition",
+                        exactText ? "bg-brass" : "bg-bone/[0.12]",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 h-4 w-4 rounded-full bg-ink-950 transition",
+                          exactText ? "left-[18px]" : "left-0.5",
+                        )}
+                      />
+                    </button>
+                    Read my exact words (skip the AI script)
+                  </label>
+                ) : null}
+
+                {tpl.steps.video ? (
+                  <p className="mt-3 text-[11px] text-slate-dim">{VIDEO_TIERS[quality].blurb}</p>
+                ) : null}
               </div>
 
               <div className="mt-5 flex flex-col items-center gap-4">
@@ -377,15 +472,16 @@ export default function RunDemoPage() {
                   onClick={generate}
                   disabled={!prompt.trim()}
                 >
-                  Generate ad · ~${est.total.toFixed(2)}
+                  Make it · ~${est.total.toFixed(2)}
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M13 6l6 6-6 6" />
                   </svg>
                 </button>
                 <p className="max-w-md text-center text-[12px] text-slate-dim">
-                  Estimated ${est.total.toFixed(2)} in USDC for a {est.realDurationSec}s ad (
-                  {est.scenes} scenes at {resolution}). Final price is quoted per step before it
-                  runs, and can never exceed the budget you approve.
+                  Estimated ${est.total.toFixed(2)} in USDC
+                  {tpl.steps.video ? ` for a ${est.realDurationSec}s piece (${est.scenes} scenes)` : ""}.
+                  Each step's exact price is quoted before it runs, and the total can never exceed the
+                  budget you approve. Pay only for what you make.
                 </p>
               </div>
             </motion.div>
@@ -403,7 +499,7 @@ export default function RunDemoPage() {
                   <span className="relative h-2.5 w-2.5 rounded-full bg-brass shadow-glow-brass" />
                 </div>
                 <h1 className="font-display text-2xl font-semibold tracking-tight text-bone sm:text-3xl">
-                  Creating your ad
+                  Creating your {tpl.label.toLowerCase()}
                 </h1>
                 <p className="mx-auto mt-2 max-w-md text-[13px] italic text-bone/50">“{prompt}”</p>
               </div>
@@ -457,14 +553,27 @@ export default function RunDemoPage() {
               <div className="mb-5 text-center">
                 <span className="pill-brass">Ready</span>
                 <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-bone">
-                  Your ad is ready.
+                  Your {tpl.label.toLowerCase()} is ready.
                 </h1>
               </div>
 
               <div className="panel overflow-hidden">
-                <div className={cn("relative mx-auto w-full overflow-hidden bg-black", format.ratio, format.key === "16:9" ? "" : "max-w-sm")}>
-                  {videoUrl ? (
+                <div
+                  className={cn(
+                    "relative mx-auto w-full overflow-hidden bg-black",
+                    mediaType.startsWith("audio") ? "aspect-video" : format.ratio,
+                    format.key === "16:9" || mediaType.startsWith("audio") ? "" : "max-w-sm",
+                  )}
+                >
+                  {videoUrl && mediaType.startsWith("video") ? (
                     <video src={videoUrl} className="h-full w-full object-cover" autoPlay loop controls playsInline />
+                  ) : videoUrl && mediaType.startsWith("image") ? (
+                    <img src={videoUrl} alt={title} className="h-full w-full object-cover" />
+                  ) : videoUrl && mediaType.startsWith("audio") ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-6">
+                      <img src={poster(title)} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
+                      <audio src={videoUrl} controls autoPlay className="relative z-10 w-full max-w-sm" />
+                    </div>
                   ) : (
                     <>
                       <img src={poster(title)} alt={title} className="h-full w-full object-cover" />
@@ -480,7 +589,8 @@ export default function RunDemoPage() {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-bone/[0.06] px-5 py-3 text-[12px]">
                   <span className="font-medium text-bone">
-                    {title} · {est.realDurationSec}s · {format.label} · {resolution}
+                    {title} · {tpl.label}
+                    {tpl.steps.video ? ` · ${est.realDurationSec}s · ${resolution}` : ""}
                   </span>
                   <span className="data">
                     {actualSpent != null ? `$${actualSpent.toFixed(2)} spent` : `~$${est.total.toFixed(2)} est.`}
@@ -523,8 +633,8 @@ export default function RunDemoPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="mb-2 text-[10px] uppercase tracking-[0.16em] text-slate-dim">{label}</div>
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-dim">{label}</span>
       {children}
     </div>
   )
@@ -534,22 +644,19 @@ function Segmented({
   options,
   value,
   onChange,
-  compact,
 }: {
   options: { key: string; label: string }[]
   value: string
   onChange: (v: string) => void
-  compact?: boolean
 }) {
   return (
-    <div className={cn("flex flex-wrap gap-1.5", !compact && "rounded-full border border-bone/[0.08] p-1")}>
+    <div className="inline-flex items-center gap-0.5 rounded-lg border border-bone/[0.07] bg-bone/[0.02] p-0.5">
       {options.map((o) => (
         <button
           key={o.key}
           onClick={() => onChange(o.key)}
           className={cn(
-            "rounded-full text-[12px] font-medium transition",
-            compact ? "border border-bone/[0.08] px-2.5 py-1" : "flex-1 px-2 py-1.5",
+            "rounded-[6px] px-2.5 py-1 text-[11px] font-medium transition",
             value === o.key ? "bg-brass text-ink-950" : "text-slate hover:text-bone",
           )}
         >

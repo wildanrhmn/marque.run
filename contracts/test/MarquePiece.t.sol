@@ -2,15 +2,15 @@
 pragma solidity 0.8.27;
 
 import {Test} from "forge-std/Test.sol";
-import {MarqueAd} from "../src/MarqueAd.sol";
+import {MarquePiece} from "../src/MarquePiece.sol";
 
-contract MarqueAdTest is Test {
-    MarqueAd internal nft;
+contract MarquePieceTest is Test {
+    MarquePiece internal nft;
     address internal owner = address(0xA11CE);
     address internal operator = address(0xB0B);
 
     function setUp() public {
-        nft = new MarqueAd(owner);
+        nft = new MarquePiece(owner);
     }
 
     function test_MintRecordsProvenance() public {
@@ -19,7 +19,7 @@ contract MarqueAdTest is Test {
         hashes[1] = bytes32(uint256(2));
         hashes[2] = bytes32(uint256(3));
 
-        uint256 tokenId = nft.mintAd(operator, bytes32(uint256(0xBEEF)), 2_000_000, hashes, "ipfs://abc");
+        uint256 tokenId = nft.mintPiece(operator, bytes32(uint256(0xBEEF)), 2_000_000, hashes, "ipfs://abc");
         assertEq(tokenId, 0);
         assertEq(nft.ownerOf(tokenId), operator);
         assertEq(nft.tokenURI(tokenId), "ipfs://abc");
@@ -30,7 +30,7 @@ contract MarqueAdTest is Test {
 
     function test_RevertOnEmptyProvenance() public {
         bytes32[] memory hashes = new bytes32[](0);
-        vm.expectRevert(MarqueAd.EmptyProvenance.selector);
-        nft.mintAd(operator, bytes32(0), 0, hashes, "");
+        vm.expectRevert(MarquePiece.EmptyProvenance.selector);
+        nft.mintPiece(operator, bytes32(0), 0, hashes, "");
     }
 }

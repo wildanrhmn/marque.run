@@ -29,6 +29,9 @@ export interface ComposeResult {
   assetUrl: string
   metadataUrl: string
   contentType: string
+  tokenUri?: string
+  assetCid?: string
+  metadataCid?: string
 }
 
 export async function composeFinalAd(req: ComposeRequestInput): Promise<ComposeResult> {

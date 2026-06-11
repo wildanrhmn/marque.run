@@ -15,6 +15,7 @@ const KIND_LABEL: Record<AgentTimelineEvent["kind"], string> = {
   "broker.relay.confirmed": "Settlement confirmed",
   "specialist.venice.response": "Specialist returned output",
   "composer.scene.rendered": "Composer rendered scene",
+  "broker.ipfs.pinned": "Pinned to IPFS",
   "composer.final.encoded": "Composer finalized",
   "mint.tx.submitted": "Mint submitted",
   "mint.tx.confirmed": "Minted",

@@ -22,6 +22,9 @@ const Schema = z.object({
   USDC_BASE: AddressSchema,
   DELEGATION_MANAGER_ADDRESS: AddressSchema,
   EIP7702_STATELESS_DELEGATOR: AddressSchema.default("0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B" as Address),
+  PINATA_JWT: z.string().optional(),
+  PINATA_GATEWAY: z.string().optional(),
+  PINATA_GATEWAY_TOKEN: z.string().optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 })
 
