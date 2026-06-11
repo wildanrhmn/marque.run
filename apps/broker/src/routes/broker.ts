@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { z } from "zod"
-import { type Address, type Hex, encodeFunctionData, getAddress, parseAbi } from "viem"
+import { type Address, type Hex, encodeFunctionData, parseAbi, parseUnits } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import {
   BASE_CHAIN_ID,
@@ -22,10 +22,12 @@ const HEX_BYTES = /^0x[a-fA-F0-9]*$/
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 
 const AuthorizationListEntrySchema = z.object({
-  chainId: z.string(),
-  contractAddress: z.string().regex(ADDRESS_REGEX),
-  nonce: z.string().regex(HEX_BYTES),
-  signature: z.string().regex(HEX_BYTES),
+  address: z.string().regex(ADDRESS_REGEX),
+  chainId: z.number(),
+  nonce: z.number(),
+  r: z.string().regex(HEX_BYTES),
+  s: z.string().regex(HEX_BYTES),
+  yParity: z.number(),
 })
 
 const PaymentEnvelopeSchema = z.object({
@@ -34,8 +36,7 @@ const PaymentEnvelopeSchema = z.object({
   amountAtoms: z.string().regex(/^\d+$/),
   briefId: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
   specialistKind: z.enum(SPECIALIST_KINDS),
-  delegationContext: z.string().regex(HEX_BYTES),
-  delegationManager: z.string().regex(ADDRESS_REGEX).optional(),
+  delegation: z.record(z.string(), z.unknown()),
   authorizationList: z.array(AuthorizationListEntrySchema).optional(),
 })
 
@@ -77,6 +78,7 @@ function getContext(): RouteContext {
       floatPrivateKey: env.BROKER_FLOAT_PRIVATE_KEY,
       usdc: env.USDC_BASE,
       chainId: BASE_CHAIN_ID,
+      apiKey: env.VENICE_API_KEY,
     }),
     brokerAddress: floatAccount.address,
     webhookUrl: `${env.ONESHOT_WEBHOOK_PUBLIC_BASE_URL.replace(/\/+$/, "")}/webhook/relay`,
@@ -128,39 +130,38 @@ async function relayDelegationRedemption(args: SettleArgs): Promise<SettleResult
   }
 
   const quote = await ctx.oneShot.getFeeData({ chainId: BASE_CHAIN_ID, token: USDC_BASE })
-  const feeAtoms = BigInt(quote.minFee)
+  const usdcDecimals = Number(usdcToken.decimals)
+  const minFee = quote.minFee.includes(".")
+    ? parseUnits(quote.minFee as `${number}`, usdcDecimals)
+    : BigInt(quote.minFee)
+  const feeAtoms = minFee * 2n
   const paymentAtoms = BigInt(envelope.amountAtoms)
 
   const executions = [
-    { to: USDC_BASE, value: "0", data: encodeErc20Transfer(feeCollector, feeAtoms) },
-    { to: USDC_BASE, value: "0", data: encodeErc20Transfer(ctx.brokerAddress, paymentAtoms) },
+    { target: USDC_BASE, value: "0", data: encodeErc20Transfer(feeCollector, feeAtoms) },
+    { target: USDC_BASE, value: "0", data: encodeErc20Transfer(ctx.brokerAddress, paymentAtoms) },
   ]
 
   const authorizationList: OneShotAuthorizationListEntry[] | undefined =
     envelope.authorizationList && envelope.authorizationList.length > 0
-      ? envelope.authorizationList.map((a) => ({
-          chainId: a.chainId,
-          contractAddress: getAddress(a.contractAddress),
-          nonce: a.nonce as Hex,
-          signature: a.signature as Hex,
-        }))
+      ? (envelope.authorizationList as OneShotAuthorizationListEntry[])
       : undefined
 
-  const sent = await ctx.oneShot.send7710Transaction({
+  const taskId = await ctx.oneShot.send7710Transaction({
     chainId: BASE_CHAIN_ID,
     context: quote.context,
     destinationUrl: ctx.webhookUrl,
     authorizationList,
     transactions: [
       {
-        permissionContext: [envelope.delegationContext as Hex],
+        permissionContext: [envelope.delegation],
         executions,
       },
     ],
   })
 
   state.recordTask({
-    taskId: sent.taskId,
+    taskId,
     briefId: envelope.briefId as Hex,
     specialistKind: envelope.specialistKind,
     status: "Pending",
@@ -178,11 +179,7 @@ async function relayDelegationRedemption(args: SettleArgs): Promise<SettleResult
     ts: Date.now(),
     kind: "broker.relay.submitted",
     specialistKind: envelope.specialistKind,
-    details: {
-      taskId: sent.taskId,
-      amountAtoms: envelope.amountAtoms,
-      feeAtoms: feeAtoms.toString(),
-    },
+    details: { taskId, amountAtoms: envelope.amountAtoms, feeAtoms: feeAtoms.toString() },
   })
 
   if (authorizationList) {
@@ -191,13 +188,11 @@ async function relayDelegationRedemption(args: SettleArgs): Promise<SettleResult
       ts: Date.now(),
       kind: "operator.upgrade.7702.signed",
       specialistKind: envelope.specialistKind,
-      details: {
-        target: authorizationList[0]!.contractAddress,
-      },
+      details: { target: authorizationList[0]!.address },
     })
   }
 
-  return { taskId: sent.taskId }
+  return { taskId }
 }
 
 async function awaitTaskConfirmed(args: {
@@ -208,13 +203,11 @@ async function awaitTaskConfirmed(args: {
   const start = Date.now()
   while (Date.now() - start < args.timeoutMs) {
     const status = await args.ctx.oneShot.getStatus(args.taskId)
-    if (status.code === 200) return { hash: status.hash }
-    if (status.code === 400 || status.code === 500) {
-      throw new BrokerSettlementError(
-        `relay terminal status ${status.label}: ${status.message ?? status.data ?? ""}`,
-      )
+    if (status.status === 200) return { hash: status.receipt?.transactionHash }
+    if (status.status >= 400) {
+      throw new BrokerSettlementError(`relay terminal status ${status.status}: ${status.message ?? ""}`)
     }
-    await new Promise((r) => setTimeout(r, 1500))
+    await new Promise((r) => setTimeout(r, 2000))
   }
   throw new BrokerSettlementError(`relay timed out after ${args.timeoutMs}ms`)
 }

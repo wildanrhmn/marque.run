@@ -18,14 +18,16 @@ export interface OneShotFeeQuote {
 }
 
 export interface OneShotAuthorizationListEntry {
-  chainId: string
-  contractAddress: Address
-  nonce: Hex
-  signature: Hex
+  address: Address
+  chainId: number
+  nonce: number
+  r: Hex
+  s: Hex
+  yParity: number
 }
 
 export interface OneShotExecution {
-  to: Address
+  target: Address
   value: string
   data: Hex
 }
@@ -36,20 +38,15 @@ export interface OneShotSend7710Args {
   destinationUrl?: string
   authorizationList?: OneShotAuthorizationListEntry[]
   transactions: {
-    permissionContext: Hex[]
+    permissionContext: unknown[]
     executions: OneShotExecution[]
   }[]
 }
 
-export type OneShotStatusCode = 100 | 110 | 200 | 400 | 500
-
 export interface OneShotStatus {
-  code: OneShotStatusCode
-  label: "Pending" | "Submitted" | "Confirmed" | "Rejected" | "Reverted"
-  hash?: Hex
-  receipt?: unknown
+  status: number
+  receipt?: { transactionHash?: Hex; blockNumber?: string }
   message?: string | null
-  data?: Hex
 }
 
 export interface OneShotClientOptions {
@@ -74,25 +71,24 @@ export class OneShotClient {
   }
 
   async getFeeData(args: { chainId: number; token: Address }): Promise<OneShotFeeQuote> {
-    return this.rpc<OneShotFeeQuote>("relayer_getFeeData", [
-      { chainId: String(args.chainId), token: args.token },
-    ])
+    return this.rpc<OneShotFeeQuote>("relayer_getFeeData", {
+      chainId: String(args.chainId),
+      token: args.token,
+    })
   }
 
-  async send7710Transaction(args: OneShotSend7710Args): Promise<{ taskId: Hex }> {
-    return this.rpc<{ taskId: Hex }>("relayer_send7710Transaction", [
-      {
-        chainId: String(args.chainId),
-        context: args.context,
-        destinationUrl: args.destinationUrl,
-        authorizationList: args.authorizationList,
-        transactions: args.transactions,
-      },
-    ])
+  async send7710Transaction(args: OneShotSend7710Args): Promise<Hex> {
+    return this.rpc<Hex>("relayer_send7710Transaction", {
+      chainId: String(args.chainId),
+      context: args.context,
+      ...(args.destinationUrl ? { destinationUrl: args.destinationUrl } : {}),
+      ...(args.authorizationList ? { authorizationList: args.authorizationList } : {}),
+      transactions: args.transactions,
+    })
   }
 
   async getStatus(taskId: Hex, includeLogs = false): Promise<OneShotStatus> {
-    return this.rpc<OneShotStatus>("relayer_getStatus", [{ id: taskId, logs: includeLogs }])
+    return this.rpc<OneShotStatus>("relayer_getStatus", { id: taskId, logs: includeLogs })
   }
 
   private async rpc<T>(method: string, params: unknown): Promise<T> {

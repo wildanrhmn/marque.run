@@ -12,6 +12,7 @@ export interface VeniceClientArgs {
   floatPrivateKey: Hex
   usdc?: Address
   chainId?: number
+  apiKey?: string
 }
 
 export interface VeniceCallArgs {
@@ -35,6 +36,7 @@ export class VeniceClient {
   private readonly floatAccount: ReturnType<typeof privateKeyToAccount>
   private readonly usdc: Address
   private readonly chainId: number
+  private readonly apiKey?: string
 
   constructor(args: VeniceClientArgs) {
     this.apiBase = args.apiBase.replace(/\/+$/, "")
@@ -42,29 +44,33 @@ export class VeniceClient {
     this.floatAccount = privateKeyToAccount(args.floatPrivateKey)
     this.usdc = args.usdc ?? USDC_BASE
     this.chainId = args.chainId ?? BASE_CHAIN_ID
+    this.apiKey = args.apiKey
     void createPrivateKey
   }
 
   async call(args: VeniceCallArgs): Promise<VeniceCallResult> {
     const url = `${this.apiBase}/${args.endpoint}`
-    const { paymentPayload } = await buildEip3009Payment({
-      account: this.floatAccount,
-      to: this.payTo,
-      valueAtoms: args.priceAtoms,
-      validBefore: Math.floor(Date.now() / 1000) + VENICE_DEFAULT_TIMEOUT_SECONDS,
-      asset: this.usdc,
-      chainId: this.chainId,
-    })
+    const headers: Record<string, string> = { "content-type": "application/json" }
 
-    const header = encodePaymentHeader(paymentPayload)
+    if (this.apiKey) {
+      headers["authorization"] = `Bearer ${this.apiKey}`
+    } else {
+      const { paymentPayload } = await buildEip3009Payment({
+        account: this.floatAccount,
+        to: this.payTo,
+        valueAtoms: args.priceAtoms,
+        validBefore: Math.floor(Date.now() / 1000) + VENICE_DEFAULT_TIMEOUT_SECONDS,
+        asset: this.usdc,
+        chainId: this.chainId,
+      })
+      const header = encodePaymentHeader(paymentPayload)
+      headers["X-402-Payment"] = header
+      headers["X-PAYMENT"] = header
+    }
 
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "X-402-Payment": header,
-        "X-PAYMENT": header,
-      },
+      headers,
       body: JSON.stringify(args.body),
     })
 

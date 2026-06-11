@@ -7,7 +7,7 @@ export interface RelayTask {
   taskId: Hex
   briefId: Hex | null
   specialistKind: string | null
-  status: OneShotStatus["label"] | "Pending"
+  status: "Pending" | "Submitted" | "Confirmed" | "Rejected" | "Reverted"
   hash?: Hex
   createdAt: number
   updatedAt: number
