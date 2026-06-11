@@ -1,63 +1,43 @@
 "use client"
-import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts"
-import type { Address, Hex } from "viem"
-import type { SpecialistKind } from "@marque/shared"
+import { keccak256, type Address, type Hex } from "viem"
+import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts"
 
-const STORAGE_KEY = "marque.session.v1"
+const DERIVE_MESSAGE =
+  "Marque session account v1\n\nSign to derive your in-browser agent budget account. This is a signature only, it costs nothing and authorizes no transfer."
 
-interface SessionIdentities {
-  directorKey: Hex
-  specialistKey: Hex
+function storageKey(owner: Address): string {
+  return `marque.session.${owner.toLowerCase()}`
 }
 
-export interface SessionIdentitySet {
-  director: PrivateKeyAccount
-  specialist: PrivateKeyAccount
-  directorKey: Hex
-  specialistKey: Hex
-}
+const cache = new Map<string, PrivateKeyAccount>()
 
-let cached: SessionIdentitySet | null = null
-
-function load(): SessionIdentities | null {
-  if (typeof window === "undefined") return null
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as SessionIdentities
-  } catch {
-    return null
-  }
-}
-
-function persist(identities: SessionIdentities): void {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(identities))
-}
-
-export function getSessionIdentities(): SessionIdentitySet {
+export async function deriveSessionAccount(
+  owner: Address,
+  signMessage: (message: string) => Promise<Hex>,
+): Promise<PrivateKeyAccount> {
+  const key = owner.toLowerCase()
+  const cached = cache.get(key)
   if (cached) return cached
-  const existing = load()
-  const directorKey = existing?.directorKey ?? generatePrivateKey()
-  const specialistKey = existing?.specialistKey ?? generatePrivateKey()
-  if (!existing) persist({ directorKey, specialistKey })
-  cached = {
-    director: privateKeyToAccount(directorKey),
-    specialist: privateKeyToAccount(specialistKey),
-    directorKey,
-    specialistKey,
+
+  const stored = typeof window !== "undefined" ? window.localStorage.getItem(storageKey(owner)) : null
+  let priv: Hex
+  if (stored) {
+    priv = stored as Hex
+  } else {
+    const signature = await signMessage(DERIVE_MESSAGE)
+    priv = keccak256(signature)
+    if (typeof window !== "undefined") window.localStorage.setItem(storageKey(owner), priv)
   }
-  return cached
+  const account = privateKeyToAccount(priv)
+  cache.set(key, account)
+  return account
 }
 
-export function clearSessionIdentities(): void {
-  if (typeof window === "undefined") return
-  window.localStorage.removeItem(STORAGE_KEY)
-  cached = null
+export function getCachedSessionAccount(owner: Address): PrivateKeyAccount | null {
+  return cache.get(owner.toLowerCase()) ?? null
 }
 
-export function describeAgentAddress(kind: SpecialistKind | "director" | "specialist"): Address {
-  const ids = getSessionIdentities()
-  if (kind === "director") return ids.director.address
-  return ids.specialist.address
+export function forgetSessionAccount(owner: Address): void {
+  cache.delete(owner.toLowerCase())
+  if (typeof window !== "undefined") window.localStorage.removeItem(storageKey(owner))
 }

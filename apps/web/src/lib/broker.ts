@@ -1,5 +1,6 @@
 import type { Hex } from "viem"
 import type { SpecialistKind } from "@marque/shared"
+import type { OperatorAuthorization } from "./smartaccount"
 import { publicEnv } from "./env"
 
 export interface BrokerCallArgs {
@@ -7,9 +8,8 @@ export interface BrokerCallArgs {
   body: unknown
   amountAtoms: bigint
   briefId: Hex
-  delegationContext: Hex
-  delegationManager: string
-  authorizationList?: unknown[]
+  delegation: unknown
+  authorization?: OperatorAuthorization
 }
 
 export interface BrokerCallResult<T = unknown> {
@@ -35,9 +35,8 @@ function buildEnvelope(args: BrokerCallArgs): string {
     amountAtoms: args.amountAtoms.toString(),
     briefId: args.briefId,
     specialistKind: args.specialistKind,
-    delegationContext: args.delegationContext,
-    delegationManager: args.delegationManager,
-    authorizationList: args.authorizationList ?? [],
+    delegation: args.delegation,
+    ...(args.authorization ? { authorizationList: [args.authorization] } : {}),
   }
   return toBase64(new TextEncoder().encode(JSON.stringify(envelope)))
 }

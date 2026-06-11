@@ -10,9 +10,16 @@ import { ConsoleGraph } from "@/components/ConsoleGraph"
 import { MintCard } from "@/components/MintCard"
 import { GradientMesh } from "@/components/GradientMesh"
 import { generateBriefId } from "@/lib/briefId"
-import { getSessionIdentities } from "@/lib/identities"
-import { toUserSmartAccount, signRootBudgetDelegation, type RootBudget } from "@/lib/smartaccount"
+import { deriveSessionAccount } from "@/lib/identities"
+import {
+  buildSessionBudget,
+  sessionUsdcBalance,
+  usdcTransferCalldata,
+  waitForTx,
+  type SessionBudget,
+} from "@/lib/smartaccount"
 import { runSwarm, type SwarmOutputs } from "@/lib/orchestrator"
+import type { PrivateKeyAccount } from "viem/accounts"
 import { useBriefStream } from "@/lib/sse"
 import { composeFinalAd, type ComposeResult } from "@/lib/compose"
 import { mintArgsForWagmi } from "@/lib/mint"
@@ -46,7 +53,11 @@ export default function RunPage() {
   const { writeContractAsync } = useWriteContract()
   const { data: walletClient } = useWalletClient()
 
-  const [grant, setGrant] = useState<RootBudget | null>(null)
+  const [sessionAccount, setSessionAccount] = useState<PrivateKeyAccount | null>(null)
+  const [sessionBalance, setSessionBalance] = useState<bigint>(0n)
+  const [funding, setFunding] = useState(false)
+
+  const [grant, setGrant] = useState<SessionBudget | null>(null)
   const [granting, setGranting] = useState(false)
   const [grantError, setGrantError] = useState<string | null>(null)
 
@@ -75,7 +86,28 @@ export default function RunPage() {
     for (const ev of stream.events) collectSettlementHashes(ev, settlementHashesRef.current)
   }, [stream.events])
 
-  const sessionIds = typeof window !== "undefined" ? getSessionIdentities() : null
+  const sessionAddress = sessionAccount?.address ?? null
+  const budgetAtoms = BigInt(Math.floor(budgetUsdc * 1_000_000))
+
+  const refreshSessionBalance = async (addr: Address) => {
+    try {
+      setSessionBalance(await sessionUsdcBalance(addr))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const ensureSession = async (): Promise<PrivateKeyAccount> => {
+    if (sessionAccount) return sessionAccount
+    if (!account.address || !walletClient) throw new Error("connect wallet first")
+    const session = await deriveSessionAccount(account.address, (message) =>
+      walletClient.signMessage({ message }),
+    )
+    setSessionAccount(session)
+    await refreshSessionBalance(session.address)
+    return session
+  }
+
   const doneCount = roster.filter((r) => r.state === "done").length
   const phase = !account.isConnected
     ? "connect"
@@ -92,19 +124,33 @@ export default function RunPage() {
     if (mm) connect({ connector: mm })
   }
 
+  const handleFund = async () => {
+    if (!account.address || !walletClient) return
+    setFunding(true)
+    setGrantError(null)
+    try {
+      const session = await ensureSession()
+      const hash = await walletClient.sendTransaction({
+        account: account.address,
+        to: USDC_BASE,
+        data: usdcTransferCalldata(session.address, budgetAtoms),
+      })
+      await waitForTx(hash)
+      await refreshSessionBalance(session.address)
+    } catch (err) {
+      setGrantError((err as Error).message)
+    } finally {
+      setFunding(false)
+    }
+  }
+
   const handleGrant = async () => {
-    if (!account.address || !sessionIds || !walletClient) return
+    if (!account.address || !walletClient) return
     setGranting(true)
     setGrantError(null)
     try {
-      const smartAccount = await toUserSmartAccount(walletClient, account.address)
-      const budget = await signRootBudgetDelegation({
-        smartAccount,
-        directorAddress: sessionIds.director.address,
-        budgetUsdcAtoms: BigInt(Math.floor(budgetUsdc * 1_000_000)),
-        ttlSeconds: 3600,
-        startTime: Math.floor(Date.now() / 1000),
-      })
+      const session = await ensureSession()
+      const budget = await buildSessionBudget({ session, budgetAtoms })
       setGrant(budget)
     } catch (err) {
       setGrantError((err as Error).message)
@@ -114,8 +160,8 @@ export default function RunPage() {
   }
 
   const handleDeploy = async () => {
-    if (!grant || !account.address || !sessionIds || !prompt.trim()) return
-    const budgetUsdcAtoms = BigInt(Math.floor(budgetUsdc * 1_000_000))
+    if (!grant || !account.address || !prompt.trim()) return
+    const budgetUsdcAtoms = budgetAtoms
     settlementHashesRef.current = new Set()
     const id = generateBriefId({ operator: account.address, prompt: prompt.trim() })
     setBriefId(id)
@@ -136,8 +182,7 @@ export default function RunPage() {
         prompt: prompt.trim(),
         durationSeconds: duration,
         perSpecialistAtoms,
-        rootBudget: grant,
-        chainId: BASE_CHAIN_ID,
+        budget: grant,
         conceptOnly: cheapTest,
         onSpecialistStart: (kind) => {
           setRoster((prev) => prev.map((r) => (r.kind === kind ? { ...r, state: "calling" } : r)))
@@ -256,18 +301,39 @@ export default function RunPage() {
               ) : !grant ? (
                 <div className="mt-3 space-y-3">
                   <div className="writ space-y-2 p-3 text-[12px]">
-                    <Row label="cap" value={`$${budgetUsdc.toFixed(2)} budget`} />
-                    <Row label="token" value="USDC · Base" />
-                    <Row label="expiry" value="1 hour" />
+                    <Row label="session" value={sessionAddress ? shortAddress(sessionAddress) : "not created"} />
+                    <Row label="balance" value={`$${(Number(sessionBalance) / 1e6).toFixed(2)} USDC`} />
+                    <Row label="budget" value={`$${budgetUsdc.toFixed(2)} USDC`} />
                   </div>
-                  <button
-                    className="btn-primary shine-host w-full"
-                    onClick={handleGrant}
-                    disabled={granting || !walletClient}
-                  >
-                    {granting ? "waiting on wallet…" : "grant mandate"}
-                  </button>
-                  <p className="text-[11px] text-slate-dim">signs a MetaMask Smart Account delegation on Base</p>
+                  {!sessionAddress ? (
+                    <button
+                      className="btn-primary shine-host w-full"
+                      onClick={() => ensureSession().catch((e) => setGrantError((e as Error).message))}
+                      disabled={!walletClient}
+                    >
+                      create session account
+                    </button>
+                  ) : sessionBalance < budgetAtoms ? (
+                    <button
+                      className="btn-primary shine-host w-full"
+                      onClick={handleFund}
+                      disabled={funding || !walletClient}
+                    >
+                      {funding ? "funding…" : `fund $${budgetUsdc.toFixed(2)}`}
+                    </button>
+                  ) : (
+                    <button
+                      className="btn-primary shine-host w-full"
+                      onClick={handleGrant}
+                      disabled={granting || !walletClient}
+                    >
+                      {granting ? "authorizing…" : "authorize budget"}
+                    </button>
+                  )}
+                  <p className="text-[11px] leading-relaxed text-slate-dim">
+                    Marque derives an in-browser Smart Account from your signature, you fund it, it delegates a
+                    capped budget the agents redeem through 1Shot.
+                  </p>
                   {grantError ? (
                     <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[11px] text-red-300">
                       {grantError}
@@ -366,8 +432,8 @@ export default function RunPage() {
 
             <MandateChain
               operator={account.address ?? null}
-              director={sessionIds?.director.address ?? null}
-              specialist={sessionIds?.specialist.address ?? null}
+              director={sessionAddress}
+              specialist={grant?.smartAccountAddress ?? null}
               broker={publicEnv.NEXT_PUBLIC_BROKER_FLOAT_ADDRESS}
             />
           </aside>
