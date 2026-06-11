@@ -15,6 +15,14 @@ import {
 
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address
 
+export interface ActivityItem {
+  kind: "deposit" | "withdraw" | "spend"
+  usd: number
+  label: string
+  ts: number
+  hash?: string
+}
+
 interface StudioContextValue {
   sessionAddress: Address | null
   balanceAtoms: bigint
@@ -24,12 +32,18 @@ interface StudioContextValue {
   budget: SessionBudget | null
   manageOpen: boolean
   setManageOpen: (v: boolean) => void
+  activity: ActivityItem[]
+  recordActivity: (item: ActivityItem) => void
   ensureSession: () => Promise<PrivateKeyAccount>
   ensureBudget: () => Promise<SessionBudget>
   refresh: () => Promise<void>
   deposit: (usd: number) => Promise<void>
   withdraw: () => Promise<void>
   openManage: () => void
+}
+
+function activityKey(addr: string): string {
+  return `marque.activity.${addr.toLowerCase()}`
 }
 
 const StudioContext = createContext<StudioContextValue | null>(null)
@@ -49,6 +63,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
+  const [activity, setActivity] = useState<ActivityItem[]>([])
 
   useEffect(() => {
     if (!account.address || session) return
@@ -58,8 +73,28 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       sessionUsdcBalance(cached.address)
         .then(setBalanceAtoms)
         .catch(() => {})
+      try {
+        const raw = window.localStorage.getItem(activityKey(cached.address))
+        if (raw) setActivity(JSON.parse(raw) as ActivityItem[])
+      } catch {
+        /* ignore */
+      }
     }
   }, [account.address, session])
+
+  const recordActivity = (item: ActivityItem) => {
+    setActivity((prev) => {
+      const next = [item, ...prev].slice(0, 20)
+      if (session) {
+        try {
+          window.localStorage.setItem(activityKey(session.address), JSON.stringify(next))
+        } catch {
+          /* ignore */
+        }
+      }
+      return next
+    })
+  }
 
   const refresh = async () => {
     if (!session) return
@@ -107,7 +142,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       await waitForTx(hash)
       await refresh()
       setBudget(null)
-      setManageOpen(false)
+      recordActivity({ kind: "deposit", usd, label: "Deposit", ts: Date.now(), hash })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -119,11 +154,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     if (!session || !account.address) return
     setBusy("withdraw")
     setError(null)
+    const before = Number(balanceAtoms) / 1_000_000
     try {
       await withdrawSession({ session, to: account.address })
       await refresh()
       setBudget(null)
-      setManageOpen(false)
+      recordActivity({ kind: "withdraw", usd: before, label: "Withdraw to wallet", ts: Date.now() })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -140,6 +176,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     budget,
     manageOpen,
     setManageOpen,
+    activity,
+    recordActivity,
     ensureSession,
     ensureBudget,
     refresh,

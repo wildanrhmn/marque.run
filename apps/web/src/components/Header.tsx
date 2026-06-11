@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
@@ -72,19 +72,16 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
 
   const [amount, setAmount] = useState(2)
   const [copied, setCopied] = useState(false)
-  const walletRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!studio.manageOpen) return
-    const onDoc = (e: MouseEvent) => {
-      if (walletRef.current && !walletRef.current.contains(e.target as Node)) studio.setManageOpen(false)
-    }
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && studio.setManageOpen(false)
-    document.addEventListener("mousedown", onDoc)
     document.addEventListener("keydown", onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
     return () => {
-      document.removeEventListener("mousedown", onDoc)
       document.removeEventListener("keydown", onKey)
+      document.body.style.overflow = prev
     }
   }, [studio])
 
@@ -100,6 +97,7 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
   }
 
   return (
+    <>
     <header
       className={cn(
         "fixed left-1/2 top-5 z-50 -translate-x-1/2",
@@ -153,106 +151,15 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
                   Set up account
                 </button>
               ) : (
-                <div className="relative" ref={walletRef}>
-                  <button
-                    onClick={() => studio.setManageOpen(!studio.manageOpen)}
-                    className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-brass/30 bg-brass/[0.07] px-3 transition hover:bg-brass/[0.14]"
-                  >
-                    <span className="font-display text-[13px] font-semibold text-bone">${studio.balanceUsd.toFixed(2)}</span>
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      className={cn("text-brass transition-transform", studio.manageOpen && "rotate-180")}
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </button>
-                  <AnimatePresence>
-                    {studio.manageOpen ? (
-                      <motion.div
-                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                        className="absolute right-0 top-11 w-72 rounded-2xl border border-bone/10 bg-ink-900/95 p-4 text-left shadow-2xl backdrop-blur-xl"
-                      >
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-dim">Marque balance</div>
-                        <div className="mt-1 font-display text-[32px] font-semibold leading-none text-bone">
-                          ${studio.balanceUsd.toFixed(2)}
-                        </div>
-                        <button
-                          onClick={copyStudio}
-                          className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-bone/10 bg-bone/[0.03] px-2.5 py-1 font-mono text-[11px] text-bone/70 transition hover:border-brass/30 hover:text-bone"
-                        >
-                          {shortAddress(studio.sessionAddress)}
-                          {copied ? (
-                            <span className="text-[10px] uppercase tracking-[0.1em] text-live">copied</span>
-                          ) : (
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="9" y="9" width="11" height="11" rx="2" />
-                              <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-                            </svg>
-                          )}
-                        </button>
-
-                        <div className="mt-4 flex gap-1.5">
-                          {[1, 2, 5, 10].map((a) => (
-                            <button
-                              key={a}
-                              onClick={() => setAmount(a)}
-                              className={cn(
-                                "flex-1 rounded-lg border py-1.5 text-[12px] font-semibold transition",
-                                amount === a
-                                  ? "border-brass/50 bg-brass/10 text-brass"
-                                  : "border-bone/[0.08] text-bone/65 hover:border-brass/30",
-                              )}
-                            >
-                              ${a}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-bone/[0.08] bg-bone/[0.02] px-3">
-                          <span className="text-[13px] text-slate-dim">$</span>
-                          <input
-                            type="number"
-                            min="0.5"
-                            step="0.5"
-                            value={amount}
-                            onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))}
-                            className="w-full bg-transparent py-2 text-[14px] font-medium text-bone outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                          />
-                          <span className="text-[11px] text-slate-dim">USDC</span>
-                        </div>
-
-                        <button
-                          className="btn-primary shine-host mt-3 h-10 w-full text-[13px]"
-                          onClick={() => studio.deposit(amount)}
-                          disabled={studio.busy === "deposit" || amount <= 0}
-                        >
-                          {studio.busy === "deposit" ? "Depositing…" : `Deposit $${amount.toFixed(2)}`}
-                        </button>
-                        {studio.balanceAtoms > 0n ? (
-                          <button
-                            className="mt-2 h-10 w-full rounded-xl border border-bone/12 text-[13px] font-medium text-bone/85 transition hover:border-brass/40 hover:text-bone disabled:opacity-50"
-                            onClick={studio.withdraw}
-                            disabled={studio.busy === "withdraw"}
-                          >
-                            {studio.busy === "withdraw" ? "Withdrawing…" : `Withdraw $${studio.balanceUsd.toFixed(2)}`}
-                          </button>
-                        ) : null}
-                        {studio.error ? (
-                          <p className="mt-2.5 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-center text-[11px] text-red-300">
-                            {studio.error}
-                          </p>
-                        ) : null}
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </div>
+                <button
+                  onClick={() => studio.setManageOpen(true)}
+                  className="inline-flex h-9 items-center gap-2 rounded-full border border-brass/30 bg-brass/[0.07] px-3.5 transition hover:bg-brass/[0.14]"
+                >
+                  <span className="font-display text-[13px] font-semibold text-bone">${studio.balanceUsd.toFixed(2)}</span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-brass/80">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
               )
             ) : null}
             <button
@@ -275,5 +182,127 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
         )}
       </div>
     </header>
+
+      <AnimatePresence>
+        {studio.manageOpen && studio.sessionAddress ? (
+          <>
+            <motion.button
+              aria-label="Close"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => studio.setManageOpen(false)}
+              className="fixed inset-0 z-[190] bg-ink-950/70 backdrop-blur-sm"
+            />
+            <motion.aside
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "tween", duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed right-0 top-0 z-[200] flex h-full w-full max-w-[380px] flex-col border-l border-bone/10 bg-ink-900/95 shadow-2xl backdrop-blur-xl"
+            >
+              <div className="flex items-center justify-between px-6 pb-4 pt-6">
+                <span className="font-display text-base font-semibold text-bone">Your balance</span>
+                <button
+                  onClick={() => studio.setManageOpen(false)}
+                  className="grid h-8 w-8 place-items-center rounded-full text-bone/50 transition hover:bg-bone/[0.06] hover:text-bone"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 pb-6">
+                <div className="font-display text-[44px] font-semibold leading-none text-bone">${studio.balanceUsd.toFixed(2)}</div>
+                <button
+                  onClick={copyStudio}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full border border-bone/10 bg-bone/[0.03] px-3 py-1.5 font-mono text-[11px] text-bone/65 transition hover:border-brass/30 hover:text-bone"
+                >
+                  {shortAddress(studio.sessionAddress)}
+                  {copied ? (
+                    <span className="text-[10px] uppercase tracking-[0.1em] text-live">copied</span>
+                  ) : (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="11" height="11" rx="2" />
+                      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                    </svg>
+                  )}
+                </button>
+
+                <div className="mt-7 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-dim">Add funds</div>
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {[5, 10, 25, 50].map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => setAmount(a)}
+                      className={cn(
+                        "rounded-xl border py-2.5 text-[13px] font-semibold transition",
+                        amount === a ? "border-brass/50 bg-brass/10 text-brass" : "border-bone/[0.08] text-bone/65 hover:border-brass/30",
+                      )}
+                    >
+                      ${a}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-bone/[0.08] bg-bone/[0.02] px-3.5">
+                  <span className="text-[15px] text-slate-dim">$</span>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={amount}
+                    onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full bg-transparent py-3 text-[16px] font-medium text-bone outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-[12px] text-slate-dim">USDC</span>
+                </div>
+                <button
+                  className="btn-primary shine-host mt-3 h-12 w-full text-[14px]"
+                  onClick={() => studio.deposit(amount)}
+                  disabled={studio.busy === "deposit" || amount <= 0}
+                >
+                  {studio.busy === "deposit" ? "Depositing…" : `Deposit $${amount.toFixed(2)}`}
+                </button>
+                {studio.error ? (
+                  <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-2.5 text-center text-[11px] text-red-300">{studio.error}</p>
+                ) : null}
+
+                {studio.activity.length > 0 ? (
+                  <div className="mt-8">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-dim">Recent</div>
+                    <ul className="mt-3 space-y-1">
+                      {studio.activity.map((a, i) => (
+                        <li key={`${a.ts}-${i}`} className="flex items-center justify-between rounded-lg px-1 py-2 text-[12.5px]">
+                          <span className="flex items-center gap-2.5 text-bone/75">
+                            <span className={cn("grid h-6 w-6 place-items-center rounded-full text-[13px]", a.kind === "deposit" ? "bg-live/10 text-live" : a.kind === "withdraw" ? "bg-bone/[0.06] text-bone/70" : "bg-brass/10 text-brass")}>
+                              {a.kind === "deposit" ? "↓" : a.kind === "withdraw" ? "↑" : "◆"}
+                            </span>
+                            {a.label}
+                          </span>
+                          <span className={cn("font-mono", a.kind === "deposit" ? "text-live" : "text-bone/60")}>
+                            {a.kind === "deposit" ? "+" : "−"}${a.usd.toFixed(2)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+
+              {studio.balanceAtoms > 0n ? (
+                <div className="border-t border-bone/[0.06] px-6 py-4">
+                  <button
+                    className="h-11 w-full rounded-xl text-[13px] font-medium text-bone/55 transition hover:text-bone disabled:opacity-50"
+                    onClick={studio.withdraw}
+                    disabled={studio.busy === "withdraw"}
+                  >
+                    {studio.busy === "withdraw" ? "Withdrawing…" : `Withdraw $${studio.balanceUsd.toFixed(2)} to my wallet`}
+                  </button>
+                </div>
+              ) : null}
+            </motion.aside>
+          </>
+        ) : null}
+      </AnimatePresence>
+    </>
   )
 }

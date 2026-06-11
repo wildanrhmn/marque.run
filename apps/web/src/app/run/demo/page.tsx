@@ -292,6 +292,7 @@ export default function RunDemoPage() {
       const balAfter = await sessionUsdcBalance(b.smartAccountAddress)
       const spent = Number(balBefore - balAfter) / 1e6
       setActualSpent(Number((spent > 0 ? spent : 0).toFixed(2)))
+      if (spent > 0) studio.recordActivity({ kind: "spend", usd: spent, label: `${title} · ${tpl.label}`, ts: Date.now() })
       await studio.refresh()
       setStage("result")
     } catch (err) {
