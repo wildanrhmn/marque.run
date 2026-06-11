@@ -164,52 +164,58 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               initial={{ opacity: 0, scale: 0.97, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="relative z-10 w-full max-w-sm rounded-2xl border border-bone/10 bg-ink-900/95 p-6 shadow-2xl"
+              className="relative z-10 w-full max-w-sm rounded-2xl border border-bone/10 bg-ink-900/95 p-7 shadow-2xl"
             >
-              <div className="flex items-baseline justify-between">
-                <h2 className="font-display text-lg font-semibold text-bone">Your balance</h2>
-                <span className="font-display text-2xl font-semibold text-bone">${(Number(balanceAtoms) / 1e6).toFixed(2)}</span>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-dim">Marque balance</div>
+              <div className="mt-1.5 font-display text-[40px] font-semibold leading-none text-bone">
+                ${(Number(balanceAtoms) / 1e6).toFixed(2)}
               </div>
-              <p className="mt-1 text-[12px] leading-relaxed text-bone/55">
-                Your studio balance pays the agents as they work. Top it up, and withdraw whatever you do not spend.
-                {session ? <span className="ml-1 font-mono text-bone/40">{shortAddress(session.address)}</span> : null}
+              <p className="mt-3 text-[12.5px] leading-relaxed text-bone/55">
+                Your balance pays the agents as they work. Top it up, and withdraw whatever you do not spend.
               </p>
+              {session ? (
+                <div className="mt-2 font-mono text-[11px] text-bone/35">studio · {shortAddress(session.address)}</div>
+              ) : null}
 
-              <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-dim">Deposit</div>
-              <div className="mt-2 flex gap-2">
-                {[1, 2, 5, 10].map((a) => (
-                  <button
-                    key={a}
-                    onClick={() => setDepositUsd(a)}
-                    className={cn(
-                      "flex-1 rounded-lg border py-2 text-[13px] font-medium transition",
-                      depositUsd === a ? "border-brass/50 bg-brass/10 text-brass" : "border-bone/[0.08] text-bone/70 hover:border-brass/30",
-                    )}
-                  >
-                    ${a}
-                  </button>
-                ))}
+              <div className="mt-6 border-t border-bone/[0.07] pt-6">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-dim">Add funds</div>
+                <div className="mt-3 grid grid-cols-4 gap-2.5">
+                  {[1, 2, 5, 10].map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => setDepositUsd(a)}
+                      className={cn(
+                        "rounded-xl border py-2.5 text-[14px] font-semibold transition",
+                        depositUsd === a
+                          ? "border-brass/50 bg-brass/10 text-brass"
+                          : "border-bone/[0.08] text-bone/70 hover:border-brass/30 hover:text-bone",
+                      )}
+                    >
+                      ${a}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="btn-primary shine-host mt-4 h-12 w-full text-[14px]"
+                  onClick={() => deposit(depositUsd)}
+                  disabled={busy === "deposit" || !walletClient}
+                >
+                  {busy === "deposit" ? "Depositing…" : `Deposit $${depositUsd.toFixed(2)}`}
+                </button>
               </div>
-              <button
-                className="btn-primary shine-host mt-3 h-11 w-full"
-                onClick={() => deposit(depositUsd)}
-                disabled={busy === "deposit" || !walletClient}
-              >
-                {busy === "deposit" ? "Depositing…" : `Deposit $${depositUsd.toFixed(2)}`}
-              </button>
 
               {balanceAtoms > 0n ? (
                 <button
-                  className="mt-2 h-10 w-full rounded-lg border border-bone/10 text-[13px] font-medium text-bone/80 transition hover:border-brass/40 disabled:opacity-50"
+                  className="mt-3 flex h-12 w-full items-center justify-center rounded-xl border border-bone/12 text-[13.5px] font-medium text-bone/85 transition hover:border-brass/40 hover:text-bone disabled:opacity-50"
                   onClick={withdraw}
                   disabled={busy === "withdraw"}
                 >
-                  {busy === "withdraw" ? "Withdrawing…" : "Withdraw all to my wallet"}
+                  {busy === "withdraw" ? "Withdrawing…" : `Withdraw $${(Number(balanceAtoms) / 1e6).toFixed(2)} to my wallet`}
                 </button>
               ) : null}
 
               {error ? (
-                <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-center text-[11px] text-red-300">{error}</p>
+                <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-2.5 text-center text-[11px] text-red-300">{error}</p>
               ) : null}
             </motion.div>
           </motion.div>

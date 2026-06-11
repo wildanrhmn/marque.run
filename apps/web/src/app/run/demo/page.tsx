@@ -408,10 +408,11 @@ export default function RunDemoPage() {
     }
     setMandateError(null)
     try {
-      if (!videoUrl || !account.address) throw new Error("nothing to save yet")
+      const recipient = studio.sessionAddress ?? account.address
+      if (!videoUrl || !recipient) throw new Error("nothing to save yet")
       const { base64, contentType } = await urlToBase64(videoUrl)
       const result = await mintToCollection({
-        recipient: account.address,
+        recipient,
         contentType: contentType || mediaType,
         base64,
         name: `${title} · ${tpl.label}`,

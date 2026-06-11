@@ -12,6 +12,7 @@ import { adPoster } from "@/lib/poster"
 import { shortTx } from "@/lib/format"
 import { cn } from "@/lib/cn"
 import { fetchPieces, type Piece, type MediaKind } from "@/lib/gallery"
+import { useStudio } from "@/lib/studio"
 
 type Filter = "all" | MediaKind
 
@@ -24,19 +25,21 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 export default function GalleryPage() {
   const account = useAccount()
+  const studio = useStudio()
   const [pieces, setPieces] = useState<Piece[]>([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<Filter>("all")
   const [selected, setSelected] = useState<Piece | null>(null)
+  const studioAddress = studio.sessionAddress
 
   useEffect(() => {
-    if (!account.isConnected || !account.address) {
+    if (!studioAddress) {
       setPieces([])
       return
     }
     let cancelled = false
     setLoading(true)
-    fetchPieces(account.address)
+    fetchPieces(studioAddress)
       .then((real) => {
         if (!cancelled) setPieces(real)
       })
@@ -47,7 +50,7 @@ export default function GalleryPage() {
     return () => {
       cancelled = true
     }
-  }, [account.isConnected, account.address])
+  }, [studioAddress])
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { all: pieces.length, video: 0, audio: 0, image: 0 }
@@ -79,8 +82,8 @@ export default function GalleryPage() {
               Everything you have made.
             </h1>
             <p className="max-w-2xl text-bone/60">
-              Each piece is an asset you hold, minted to your wallet with its media pinned to IPFS and a
-              full record of what was made and what it cost.
+              Each piece is an asset you hold, minted to your studio account with its media pinned to IPFS
+              and a full record of what was made and what it cost.
             </p>
           </div>
         </Reveal>
@@ -88,14 +91,27 @@ export default function GalleryPage() {
         {!account.isConnected ? (
           <EmptyState
             title="Connect to see your collection"
-            body="Your minted pieces live in your wallet. Connect to load them here."
+            body="Your minted pieces live in your Marque studio account. Connect to load them here."
           />
+        ) : !studioAddress ? (
+          <div className="panel flex flex-col items-center gap-4 px-6 py-20 text-center">
+            <SealMark size={48} className="opacity-70" />
+            <div>
+              <h2 className="font-display text-xl font-semibold text-bone">Open your studio account</h2>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-bone/55">
+                One signature loads your Marque studio account, where your pieces live.
+              </p>
+            </div>
+            <button className="btn-primary shine-host mt-2" onClick={() => studio.ensureSession().catch(() => {})}>
+              Open studio account
+            </button>
+          </div>
         ) : (
           <>
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <Stat label="pieces" value={String(pieces.length)} />
               <Stat label="total spent" value={`$${totalSpent}`} />
-              <Stat label="wallet" value={shortTx(account.address ?? "")} mono />
+              <Stat label="studio wallet" value={shortTx(studioAddress)} mono />
             </div>
 
             <div className="mb-6 flex flex-wrap gap-2">
