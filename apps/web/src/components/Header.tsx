@@ -72,17 +72,17 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
     <header
       className={cn(
         "fixed left-1/2 top-5 z-50 -translate-x-1/2",
-        "grid h-14 grid-cols-[1fr_auto_1fr] items-center rounded-full border border-bone/[0.1] bg-ink-900/80 px-4 shadow-lg backdrop-blur-md",
-        "w-[calc(100%-1.5rem)] max-w-5xl",
+        "flex h-14 items-center justify-between rounded-full border border-bone/[0.1] bg-ink-900/80 px-4 shadow-lg backdrop-blur-md",
+        "w-[calc(100%-1.5rem)] max-w-4xl",
       )}
     >
-      <div className="flex items-center justify-self-start pl-1">
+      <div className="flex items-center pl-1">
         <Link href="/" aria-label="Marque home">
           <SealMark size={26} />
         </Link>
       </div>
 
-      <nav className="hidden items-center justify-center gap-8 sm:flex">
+      <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 sm:flex">
         {navItems.map((link) => (
           <AnimatedNavLink
             key={link.href}
@@ -96,7 +96,7 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
         ))}
       </nav>
 
-      <div className="flex items-center justify-end gap-2 justify-self-end">
+      <div className="flex items-center gap-2">
         {variant === "landing" ? (
           <Link href="/run" className="btn-primary shine-host h-9 px-4 text-[13px]">
             Launch
