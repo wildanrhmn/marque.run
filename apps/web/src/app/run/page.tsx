@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
-import { useAccount, useConnect, useWriteContract } from "wagmi"
+import { useAccount, useConnect, useWriteContract, useWalletClient } from "wagmi"
 import type { Address, Hex } from "viem"
 import type { AgentTimelineEvent, SpecialistKind } from "@marque/shared"
 import { Header } from "@/components/Header"
@@ -11,7 +11,7 @@ import { MintCard } from "@/components/MintCard"
 import { GradientMesh } from "@/components/GradientMesh"
 import { generateBriefId } from "@/lib/briefId"
 import { getSessionIdentities } from "@/lib/identities"
-import { requestBudgetPermission, type GrantedPermissionContext } from "@/lib/permissions"
+import { toUserSmartAccount, signRootBudgetDelegation, type RootBudget } from "@/lib/smartaccount"
 import { runSwarm, type SwarmOutputs } from "@/lib/orchestrator"
 import { useBriefStream } from "@/lib/sse"
 import { composeFinalAd, type ComposeResult } from "@/lib/compose"
@@ -44,14 +44,16 @@ export default function RunPage() {
   const account = useAccount()
   const { connectors, connect } = useConnect()
   const { writeContractAsync } = useWriteContract()
+  const { data: walletClient } = useWalletClient()
 
-  const [grant, setGrant] = useState<GrantedPermissionContext | null>(null)
+  const [grant, setGrant] = useState<RootBudget | null>(null)
   const [granting, setGranting] = useState(false)
   const [grantError, setGrantError] = useState<string | null>(null)
 
   const [prompt, setPrompt] = useState("")
   const [duration, setDuration] = useState(30)
   const [budgetUsdc, setBudgetUsdc] = useState(2.0)
+  const [cheapTest, setCheapTest] = useState(true)
 
   const [briefId, setBriefId] = useState<Hex | null>(null)
   const [running, setRunning] = useState(false)
@@ -91,18 +93,19 @@ export default function RunPage() {
   }
 
   const handleGrant = async () => {
-    if (!account.address || !sessionIds) return
+    if (!account.address || !sessionIds || !walletClient) return
     setGranting(true)
     setGrantError(null)
     try {
-      const granted = await requestBudgetPermission({
-        delegateAddress: sessionIds.director.address,
-        chainId: BASE_CHAIN_ID,
-        perDayUsdcAtoms: 5_000_000n,
+      const smartAccount = await toUserSmartAccount(walletClient, account.address)
+      const budget = await signRootBudgetDelegation({
+        smartAccount,
+        directorAddress: sessionIds.director.address,
+        budgetUsdcAtoms: BigInt(Math.floor(budgetUsdc * 1_000_000)),
         ttlSeconds: 3600,
-        paymentToken: USDC_BASE,
+        startTime: Math.floor(Date.now() / 1000),
       })
-      setGrant(granted)
+      setGrant(budget)
     } catch (err) {
       setGrantError((err as Error).message)
     } finally {
@@ -133,9 +136,9 @@ export default function RunPage() {
         prompt: prompt.trim(),
         durationSeconds: duration,
         perSpecialistAtoms,
-        rootGrant: grant,
-        delegationManager: grant.delegationManager,
+        rootBudget: grant,
         chainId: BASE_CHAIN_ID,
+        conceptOnly: cheapTest,
         onSpecialistStart: (kind) => {
           setRoster((prev) => prev.map((r) => (r.kind === kind ? { ...r, state: "calling" } : r)))
         },
@@ -158,7 +161,7 @@ export default function RunPage() {
       setRunning(false)
     }
 
-    if (!swarm) return
+    if (!swarm || cheapTest) return
     setComposing(true)
     try {
       const scenesRaw =
@@ -253,14 +256,18 @@ export default function RunPage() {
               ) : !grant ? (
                 <div className="mt-3 space-y-3">
                   <div className="writ space-y-2 p-3 text-[12px]">
-                    <Row label="cap" value="$5 / day" />
+                    <Row label="cap" value={`$${budgetUsdc.toFixed(2)} budget`} />
                     <Row label="token" value="USDC · Base" />
                     <Row label="expiry" value="1 hour" />
                   </div>
-                  <button className="btn-primary shine-host w-full" onClick={handleGrant} disabled={granting}>
+                  <button
+                    className="btn-primary shine-host w-full"
+                    onClick={handleGrant}
+                    disabled={granting || !walletClient}
+                  >
                     {granting ? "waiting on wallet…" : "grant mandate"}
                   </button>
-                  <p className="text-[11px] text-slate-dim">requires a wallet with Advanced Permissions</p>
+                  <p className="text-[11px] text-slate-dim">signs a MetaMask Smart Account delegation on Base</p>
                   {grantError ? (
                     <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[11px] text-red-300">
                       {grantError}
@@ -334,8 +341,21 @@ export default function RunPage() {
                   }
                 />
               </div>
-              <button className="btn-primary shine-host mt-4 w-full" onClick={handleDeploy} disabled={!canDeploy}>
-                {running ? "crew running…" : composing ? "composing…" : "deploy crew"}
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-bone/[0.07] bg-bone/[0.02] p-3">
+                <input
+                  type="checkbox"
+                  checked={cheapTest}
+                  onChange={(e) => setCheapTest(e.target.checked)}
+                  disabled={!grant || running || composing}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-brass"
+                />
+                <span className="text-[12px] leading-relaxed text-bone/70">
+                  <span className="font-medium text-bone">Chain test only</span> — run just the concept agent to
+                  prove the delegation settles on-chain. Costs a fraction of a cent. Turn off for a full render.
+                </span>
+              </label>
+              <button className="btn-primary shine-host mt-3 w-full" onClick={handleDeploy} disabled={!canDeploy}>
+                {running ? "crew running…" : composing ? "composing…" : cheapTest ? "run chain test" : "deploy crew"}
                 {canDeploy ? (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M13 6l6 6-6 6" />

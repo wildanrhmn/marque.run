@@ -21,7 +21,8 @@
     "hono": "^4.6.12",
     "pino": "^9.5.0",
     "viem": "^2.21.45",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@metamask/smart-accounts-kit": "^1.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

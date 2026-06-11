@@ -10,7 +10,14 @@ interface SessionIdentities {
   specialistKey: Hex
 }
 
-let cached: { director: PrivateKeyAccount; specialist: PrivateKeyAccount } | null = null
+export interface SessionIdentitySet {
+  director: PrivateKeyAccount
+  specialist: PrivateKeyAccount
+  directorKey: Hex
+  specialistKey: Hex
+}
+
+let cached: SessionIdentitySet | null = null
 
 function load(): SessionIdentities | null {
   if (typeof window === "undefined") return null
@@ -28,7 +35,7 @@ function persist(identities: SessionIdentities): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(identities))
 }
 
-export function getSessionIdentities(): { director: PrivateKeyAccount; specialist: PrivateKeyAccount } {
+export function getSessionIdentities(): SessionIdentitySet {
   if (cached) return cached
   const existing = load()
   const directorKey = existing?.directorKey ?? generatePrivateKey()
@@ -37,6 +44,8 @@ export function getSessionIdentities(): { director: PrivateKeyAccount; specialis
   cached = {
     director: privateKeyToAccount(directorKey),
     specialist: privateKeyToAccount(specialistKey),
+    directorKey,
+    specialistKey,
   }
   return cached
 }

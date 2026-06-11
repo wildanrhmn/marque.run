@@ -4,11 +4,8 @@ import { base } from "viem/chains"
 import type { SpecialistKind } from "@marque/shared"
 import { brokerCall } from "./broker"
 import { getSessionIdentities } from "./identities"
-import {
-  signSpecialistRedelegation,
-  encodeChildDelegationAsContext,
-} from "./redelegate"
-import type { GrantedPermissionContext } from "./permissions"
+import { signSpecialistRedelegation, encodeDelegationChain } from "./redelegate"
+import type { RootBudget } from "./smartaccount"
 import {
   signSpecialistAuthorization,
   isSpecialistUpgraded,
@@ -24,9 +21,9 @@ export interface OrchestratorRunArgs {
   prompt: string
   durationSeconds: number
   perSpecialistAtoms: bigint
-  rootGrant: GrantedPermissionContext
-  delegationManager: Address
+  rootBudget: RootBudget
   chainId: number
+  conceptOnly?: boolean
   onSpecialistStart?: (kind: SpecialistKind) => void
   onSpecialistDone?: (kind: SpecialistKind, output: unknown) => void
   onError?: (kind: SpecialistKind | "compose", error: Error) => void
@@ -50,25 +47,25 @@ async function dispatchSpecialist(args: {
   kind: SpecialistKind
   body: unknown
   amountAtoms: bigint
-  rootGrant: GrantedPermissionContext
-  delegationManager: Address
+  rootBudget: RootBudget
   chainId: number
   shared: DispatchSharedState
 }): Promise<unknown> {
   const identities = getSessionIdentities()
   const child = await signSpecialistRedelegation({
-    delegator: identities.director,
+    directorKey: identities.directorKey,
     delegate: identities.specialist.address,
-    delegationManager: args.delegationManager,
+    parent: args.rootBudget.delegation,
+    environment: args.rootBudget.environment,
+    delegationManager: args.rootBudget.delegationManager,
     chainId: args.chainId,
-    parent: args.rootGrant,
     specialistKind: args.kind,
-    brokerAddress: publicEnv.NEXT_PUBLIC_BROKER_FLOAT_ADDRESS as Address,
     perCallCapAtoms: args.amountAtoms,
     ttlSeconds: 600,
+    startTime: Math.floor(Date.now() / 1000),
   })
 
-  const delegationContext = encodeChildDelegationAsContext(child, args.rootGrant.context)
+  const delegationContext = encodeDelegationChain(child, args.rootBudget.delegation)
 
   const authorizationList = args.shared.pendingAuthorization
     ? [args.shared.pendingAuthorization]
@@ -80,7 +77,7 @@ async function dispatchSpecialist(args: {
     amountAtoms: args.amountAtoms,
     briefId: args.briefId,
     delegationContext,
-    delegationManager: args.delegationManager,
+    delegationManager: args.rootBudget.delegationManager,
     authorizationList,
   })
 
@@ -123,8 +120,7 @@ export async function runSwarm(args: OrchestratorRunArgs): Promise<SwarmOutputs>
       kind: "concept",
       body: { prompt: args.prompt, durationSeconds: args.durationSeconds },
       amountAtoms: args.perSpecialistAtoms,
-      rootGrant: args.rootGrant,
-      delegationManager: args.delegationManager,
+      rootBudget: args.rootBudget,
       chainId: args.chainId,
       shared,
     })
@@ -134,6 +130,8 @@ export async function runSwarm(args: OrchestratorRunArgs): Promise<SwarmOutputs>
     args.onError?.("concept", err as Error)
     throw err
   }
+
+  if (args.conceptOnly) return outputs
 
   const conceptObj = outputs.concept as
     | { scenes?: { description: string; voiceLine: string }[]; musicPrompt?: string }
@@ -148,8 +146,7 @@ export async function runSwarm(args: OrchestratorRunArgs): Promise<SwarmOutputs>
         kind: "image",
         body: { prompt: scenes[i]?.description ?? args.prompt },
         amountAtoms: args.perSpecialistAtoms,
-        rootGrant: args.rootGrant,
-        delegationManager: args.delegationManager,
+        rootBudget: args.rootBudget,
         chainId: args.chainId,
         shared,
       })
@@ -184,8 +181,7 @@ export async function runSwarm(args: OrchestratorRunArgs): Promise<SwarmOutputs>
           kind: job.kind,
           body: job.body,
           amountAtoms: args.perSpecialistAtoms,
-          rootGrant: args.rootGrant,
-          delegationManager: args.delegationManager,
+          rootBudget: args.rootBudget,
           chainId: args.chainId,
           shared,
         })
