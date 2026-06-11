@@ -75,7 +75,7 @@ export const DUMMY_PIECES: Piece[] = [
     description:
       "A 15 second launch spot with brass-lit hero pours and a moody indie tempo, scored end to end.",
     kind: "video",
-    mediaUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    mediaUrl: ipfsToHttp("ipfs://bafybeiged6fuymnxymwdmld73qnomev6vg4f5dmuruhp2luj4pre7olegy"),
     posterUrl: "",
     spendUsd: "1.92",
     template: "ad",
