@@ -159,11 +159,10 @@ export default function RunDemoPage() {
   const [budget, setBudget] = useState<SessionBudget | null>(null)
   const [mandateBusy, setMandateBusy] = useState<string | null>(null)
   const [mandateError, setMandateError] = useState<string | null>(null)
+  const [depositOpen, setDepositOpen] = useState(false)
+  const [depositUsd, setDepositUsd] = useState(2)
   const settlementsRef = useRef<Hex[]>([])
 
-  const fundUsd = Math.max(0.5, Number(est.total.toFixed(2)) + 0.2)
-  const fundAtoms = BigInt(Math.floor(fundUsd * 1_000_000))
-  const mandateReady = !!budget
   const sessionAddress = sessionAccount?.address ?? null
 
   const refreshBalance = async (addr: Address) => {
@@ -188,19 +187,22 @@ export default function RunDemoPage() {
     if (mm) connect({ connector: mm })
   }
 
-  const handleFund = async () => {
+  const deposit = async (usd: number) => {
     if (!account.address || !walletClient) return
-    setMandateBusy("fund")
+    setMandateBusy("deposit")
     setMandateError(null)
     try {
       const s = await ensureSession()
+      const atoms = BigInt(Math.floor(usd * 1_000_000))
       const hash = await walletClient.sendTransaction({
         account: account.address,
         to: USDC_BASE,
-        data: usdcTransferCalldata(s.address, fundAtoms),
+        data: usdcTransferCalldata(s.address, atoms),
       })
       await waitForTx(hash)
       await refreshBalance(s.address)
+      setBudget(null)
+      setDepositOpen(false)
     } catch (err) {
       setMandateError((err as Error).message)
     } finally {
@@ -208,19 +210,11 @@ export default function RunDemoPage() {
     }
   }
 
-  const handleAuthorize = async () => {
-    setMandateBusy("authorize")
-    setMandateError(null)
-    try {
-      const s = await ensureSession()
-      const bal = await sessionUsdcBalance(s.address)
-      const b = await buildSessionBudget({ session: s, budgetAtoms: bal })
-      setBudget(b)
-    } catch (err) {
-      setMandateError((err as Error).message)
-    } finally {
-      setMandateBusy(null)
-    }
+  const ensureBudget = async (s: PrivateKeyAccount, bal: bigint): Promise<SessionBudget> => {
+    if (budget) return budget
+    const b = await buildSessionBudget({ session: s, budgetAtoms: bal })
+    setBudget(b)
+    return b
   }
 
   const handleWithdraw = async () => {
@@ -238,8 +232,7 @@ export default function RunDemoPage() {
     }
   }
 
-  const generate = async () => {
-    if (!prompt.trim()) return
+  const resetForRun = () => {
     cancel.current = false
     briefId.current = randHex(32)
     setEvents([])
@@ -250,9 +243,40 @@ export default function RunDemoPage() {
     setMediaType("video/mp4")
     setActualSpent(undefined)
     settlementsRef.current = []
-    setStage("generating")
-    if (live) await generateChain()
-    else await generateSimulated()
+  }
+
+  const generate = async () => {
+    if (!prompt.trim()) return
+    if (!live) {
+      resetForRun()
+      setStage("generating")
+      await generateSimulated()
+      return
+    }
+    if (!account.isConnected) {
+      handleConnect()
+      return
+    }
+    setMandateError(null)
+    setMandateBusy("prepare")
+    try {
+      const s = await ensureSession()
+      const bal = await sessionUsdcBalance(s.address)
+      setSessionBalance(bal)
+      const estAtoms = BigInt(Math.floor(est.total * 1_000_000))
+      if (bal <= estAtoms) {
+        setDepositOpen(true)
+        return
+      }
+      const b = await ensureBudget(s, bal)
+      resetForRun()
+      setStage("generating")
+      await generateChain(b)
+    } catch (err) {
+      setMandateError((err as Error).message)
+    } finally {
+      setMandateBusy(null)
+    }
   }
 
   const generateSimulated = async () => {
@@ -281,16 +305,11 @@ export default function RunDemoPage() {
     setStage("result")
   }
 
-  const generateChain = async () => {
-    if (!budget || !sessionAccount) {
-      setStatusLine("Approve your budget first")
-      setStage("compose")
-      return
-    }
-    const id = generateBriefId({ operator: sessionAccount.address, prompt: prompt.trim() })
+  const generateChain = async (b: SessionBudget) => {
+    const id = generateBriefId({ operator: b.smartAccountAddress, prompt: prompt.trim() })
     briefId.current = id
     const amount = 100_000n // $0.10 per agent step
-    let auth = budget.authorization
+    let auth = b.authorization
     const call = async (kind: SpecialistKind, body: unknown): Promise<unknown> => {
       const idx = STEPS.findIndex((s) => s.key === kind)
       if (idx >= 0) {
@@ -303,7 +322,7 @@ export default function RunDemoPage() {
         body,
         amountAtoms: amount,
         briefId: id,
-        delegations: budget.delegations,
+        delegations: b.delegations,
         authorization: auth,
       })
       auth = undefined
@@ -336,7 +355,7 @@ export default function RunDemoPage() {
         setMediaType(type)
       }
       setActualSpent(Number(((settlementsRef.current.length * Number(amount)) / 1e6).toFixed(2)))
-      await refreshBalance(sessionAccount.address)
+      await refreshBalance(b.smartAccountAddress)
       setStage("result")
     } catch (err) {
       setStatusLine(`Failed: ${(err as Error).message}`)
@@ -467,6 +486,84 @@ export default function RunDemoPage() {
       <div className="fixed inset-0 -z-10">
         <GradientMesh />
       </div>
+
+      {live ? (
+        <div className="fixed right-4 top-[72px] z-30 flex items-center gap-2 rounded-xl border border-bone/10 bg-ink-900/85 px-2.5 py-2 backdrop-blur">
+          {!account.isConnected ? (
+            <button className="btn-primary h-8 px-3 text-[12px]" onClick={handleConnect}>
+              Connect wallet
+            </button>
+          ) : !sessionAddress ? (
+            <button
+              className="btn-primary h-8 px-3 text-[12px]"
+              onClick={() => ensureSession().catch((e) => setMandateError((e as Error).message))}
+            >
+              Set up account
+            </button>
+          ) : (
+            <>
+              <div className="px-1.5">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-slate-dim">Balance</div>
+                <div className="font-display text-sm font-semibold text-bone">
+                  ${(Number(sessionBalance) / 1e6).toFixed(2)}
+                </div>
+              </div>
+              <button
+                className="h-8 rounded-lg bg-white px-3 text-[12px] font-medium text-neutral-950 transition hover:bg-white/90 disabled:opacity-50"
+                onClick={() => setDepositOpen(true)}
+                disabled={mandateBusy !== null}
+              >
+                Deposit
+              </button>
+              <button
+                className="h-8 rounded-lg border border-bone/12 px-3 text-[12px] font-medium text-bone transition hover:border-brass/40 disabled:opacity-50"
+                onClick={handleWithdraw}
+                disabled={mandateBusy !== null || sessionBalance === 0n}
+              >
+                {mandateBusy === "withdraw" ? "…" : "Withdraw"}
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {depositOpen ? (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <button aria-label="Close" className="absolute inset-0 bg-ink-950/80 backdrop-blur-xl" onClick={() => setDepositOpen(false)} />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-bone/10 bg-ink-900/95 p-6 shadow-2xl">
+            <h2 className="font-display text-lg font-semibold text-bone">Deposit to your balance</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-bone/55">
+              Move USDC from your wallet into your Marque balance. The agents spend from it; withdraw the rest anytime.
+            </p>
+            <div className="mt-4 flex gap-2">
+              {[1, 2, 5, 10].map((a) => (
+                <button
+                  key={a}
+                  onClick={() => setDepositUsd(a)}
+                  className={cn(
+                    "flex-1 rounded-lg border py-2 text-[13px] font-medium transition",
+                    depositUsd === a ? "border-brass/50 bg-brass/10 text-brass" : "border-bone/[0.08] text-bone/70 hover:border-brass/30",
+                  )}
+                >
+                  ${a}
+                </button>
+              ))}
+            </div>
+            <button
+              className="btn-primary shine-host mt-4 h-11 w-full"
+              onClick={() => deposit(depositUsd)}
+              disabled={mandateBusy === "deposit" || !walletClient}
+            >
+              {mandateBusy === "deposit" ? "depositing…" : `Deposit $${depositUsd.toFixed(2)}`}
+            </button>
+            {mandateError ? (
+              <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-center text-[11px] text-red-300">
+                {mandateError}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {/* tiny demo control, unobtrusive */}
       <div className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-full border border-bone/10 bg-ink-900/80 px-2.5 py-1.5 backdrop-blur">
@@ -642,61 +739,28 @@ export default function RunDemoPage() {
               </div>
 
               <div className="mt-5 flex flex-col items-center gap-4">
-                {live && !mandateReady ? (
-                  <div className="w-full max-w-sm space-y-2">
-                    {!account.isConnected ? (
-                      <button className="btn-primary shine-host h-12 w-full px-7 text-base" onClick={handleConnect}>
-                        connect wallet
-                      </button>
-                    ) : sessionBalance === 0n ? (
-                      <button
-                        className="btn-primary shine-host h-12 w-full px-7 text-base"
-                        onClick={handleFund}
-                        disabled={mandateBusy === "fund" || !walletClient}
-                      >
-                        {mandateBusy === "fund" ? "funding…" : `fund $${fundUsd.toFixed(2)} to your studio account`}
-                      </button>
-                    ) : (
-                      <button
-                        className="btn-primary shine-host h-12 w-full px-7 text-base"
-                        onClick={handleAuthorize}
-                        disabled={mandateBusy === "authorize"}
-                      >
-                        {mandateBusy === "authorize" ? "authorizing…" : "authorize budget & continue"}
-                      </button>
-                    )}
-                    {account.isConnected ? (
-                      <p className="text-center text-[11px] text-slate-dim">
-                        studio account {sessionAddress ? shortAddress(sessionAddress) : "—"} · balance $
-                        {(Number(sessionBalance) / 1e6).toFixed(2)}
-                      </p>
-                    ) : null}
-                    {mandateError ? (
-                      <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-center text-[11px] text-red-300">
-                        {mandateError}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <button
-                    className="btn-primary shine-host h-12 w-full max-w-sm px-7 text-base"
-                    onClick={generate}
-                    disabled={!prompt.trim()}
-                  >
-                    Make it · ~${est.total.toFixed(2)}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </button>
-                )}
-                {live && mandateReady ? (
-                  <button onClick={handleWithdraw} disabled={mandateBusy === "withdraw"} className="text-[11px] text-slate-dim hover:text-bone">
-                    {mandateBusy === "withdraw" ? "withdrawing…" : "withdraw remaining balance to wallet"}
-                  </button>
+                <button
+                  className="btn-primary shine-host h-12 w-full max-w-sm px-7 text-base"
+                  onClick={generate}
+                  disabled={!prompt.trim() || mandateBusy === "prepare"}
+                >
+                  {mandateBusy === "prepare"
+                    ? "preparing…"
+                    : live && !account.isConnected
+                      ? "Connect wallet to make it"
+                      : `Make it · ~$${est.total.toFixed(2)}`}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </button>
+                {mandateError ? (
+                  <p className="max-w-sm rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-center text-[11px] text-red-300">
+                    {mandateError}
+                  </p>
                 ) : null}
                 <p className="max-w-md text-center text-[12px] text-slate-dim">
                   {live
-                    ? "Live mode settles every step on Base mainnet through your studio Smart Account. You only fund what you spend, and can withdraw the rest anytime."
+                    ? "Each step settles on Base mainnet from your Marque balance. Pay only for what you make, and withdraw the rest anytime."
                     : `Estimated $${est.total.toFixed(2)} in USDC. Each step's exact price is quoted before it runs, and the total can never exceed the budget you approve. Pay only for what you make.`}
                 </p>
               </div>
