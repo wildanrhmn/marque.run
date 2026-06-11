@@ -8,7 +8,7 @@ export interface BrokerCallArgs {
   body: unknown
   amountAtoms: bigint
   briefId: Hex
-  delegation: unknown
+  delegations: unknown[]
   authorization?: OperatorAuthorization
 }
 
@@ -35,7 +35,7 @@ function buildEnvelope(args: BrokerCallArgs): string {
     amountAtoms: args.amountAtoms.toString(),
     briefId: args.briefId,
     specialistKind: args.specialistKind,
-    delegation: args.delegation,
+    delegations: args.delegations,
     ...(args.authorization ? { authorizationList: [args.authorization] } : {}),
   }
   return toBase64(new TextEncoder().encode(JSON.stringify(envelope)))

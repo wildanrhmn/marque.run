@@ -4,11 +4,12 @@ import {
   Implementation,
   ScopeType,
   createDelegation,
+  signDelegation,
   getSmartAccountsEnvironment,
   toMetaMaskSmartAccount,
 } from "@metamask/smart-accounts-kit"
 import { createPublicClient, http, type Hex } from "viem"
-import { privateKeyToAccount } from "viem/accounts"
+import { privateKeyToAccount, generatePrivateKey } from "viem/accounts"
 import { base } from "viem/chains"
 import { bytesToHex } from "viem/utils"
 
@@ -49,22 +50,42 @@ async function main() {
   const caps = await rpc<Record<string, { targetAddress: Hex }>>("relayer_getCapabilities", [String(base.id)])
   const targetAddress = caps[String(base.id)]!.targetAddress
 
+  const environment = getSmartAccountsEnvironment(base.id)
+  const directorKey = generatePrivateKey()
+  const director = privateKeyToAccount(directorKey)
   const smartAccount = await toMetaMaskSmartAccount({
     client: publicClient,
     implementation: Implementation.Stateless7702,
     address: operator.address,
     signer: { account: operator },
   })
+  const scope = { type: ScopeType.Erc20TransferAmount as const, tokenAddress: USDC as Hex, maxAmount: 200_000n }
 
-  const delegation = createDelegation({
-    to: targetAddress,
+  const root = createDelegation({
+    to: director.address,
     from: smartAccount.address,
     environment: smartAccount.environment,
     salt: bytesToHex(Uint8Array.from(randomBytes(32))) as Hex,
-    scope: { type: ScopeType.Erc20TransferAmount, tokenAddress: USDC, maxAmount: 200_000n },
+    scope,
   })
-  const signature = await smartAccount.signDelegation({ delegation })
-  const signedDelegation = toRelayerJson({ ...delegation, signature })
+  const rootSig = await smartAccount.signDelegation({ delegation: root })
+  const signedRoot = { ...root, signature: rootSig }
+
+  const child = createDelegation({
+    to: targetAddress,
+    from: director.address,
+    environment: smartAccount.environment,
+    parentDelegation: signedRoot,
+    salt: bytesToHex(Uint8Array.from(randomBytes(32))) as Hex,
+    scope,
+  })
+  const childSig = await signDelegation({
+    privateKey: directorKey,
+    delegation: child,
+    delegationManager: environment.DelegationManager,
+    chainId: base.id,
+  })
+  const signedChild = { ...child, signature: childSig }
 
   const briefId = bytesToHex(Uint8Array.from(randomBytes(32)))
   const envelope = {
@@ -73,7 +94,7 @@ async function main() {
     amountAtoms: "20000",
     briefId,
     specialistKind: "concept",
-    delegation: signedDelegation,
+    delegations: [toRelayerJson(signedChild), toRelayerJson(signedRoot)],
   }
   const xPayment = Buffer.from(JSON.stringify(envelope)).toString("base64")
 

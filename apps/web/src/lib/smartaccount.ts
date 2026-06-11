@@ -11,11 +11,13 @@ import {
 } from "viem"
 import { base } from "viem/chains"
 import { bytesToHex } from "viem/utils"
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
 import {
   toMetaMaskSmartAccount,
   Implementation,
   getSmartAccountsEnvironment,
   createDelegation,
+  signDelegation,
   ScopeType,
   type MetaMaskSmartAccount,
 } from "@metamask/smart-accounts-kit"
@@ -36,7 +38,8 @@ export interface OperatorAuthorization {
 
 export interface SessionBudget {
   smartAccountAddress: Address
-  delegation: unknown
+  directorAddress: Address
+  delegations: unknown[]
   authorization?: OperatorAuthorization
 }
 
@@ -89,18 +92,39 @@ export async function buildSessionBudget(args: {
   const target = await fetchRelayerTarget()
   const smartAccount = await toSessionSmartAccount(args.session)
 
-  const delegation = createDelegation({
-    to: target,
+  const directorKey = generatePrivateKey()
+  const director = privateKeyToAccount(directorKey)
+  const scope = {
+    type: ScopeType.Erc20TransferAmount as const,
+    tokenAddress: USDC_BASE as Hex,
+    maxAmount: args.budgetAtoms,
+  }
+
+  const root = createDelegation({
+    to: director.address,
     from: smartAccount.address,
     environment: smartAccount.environment,
     salt: bytesToHex(crypto.getRandomValues(new Uint8Array(32))) as Hex,
-    scope: {
-      type: ScopeType.Erc20TransferAmount,
-      tokenAddress: USDC_BASE as Hex,
-      maxAmount: args.budgetAtoms,
-    },
+    scope,
   })
-  const signature = await smartAccount.signDelegation({ delegation })
+  const rootSig = await smartAccount.signDelegation({ delegation: root })
+  const signedRoot = { ...root, signature: rootSig }
+
+  const child = createDelegation({
+    to: target,
+    from: director.address,
+    environment: smartAccount.environment,
+    parentDelegation: signedRoot,
+    salt: bytesToHex(crypto.getRandomValues(new Uint8Array(32))) as Hex,
+    scope,
+  })
+  const childSig = await signDelegation({
+    privateKey: directorKey,
+    delegation: child,
+    delegationManager: environment.DelegationManager as Address,
+    chainId: base.id,
+  })
+  const signedChild = { ...child, signature: childSig }
 
   let authorization: OperatorAuthorization | undefined
   const client = publicClient()
@@ -127,7 +151,8 @@ export async function buildSessionBudget(args: {
 
   return {
     smartAccountAddress: smartAccount.address,
-    delegation: toRelayerJson({ ...delegation, signature }),
+    directorAddress: director.address,
+    delegations: [toRelayerJson(signedChild), toRelayerJson(signedRoot)],
     authorization,
   }
 }

@@ -44,7 +44,7 @@ async function dispatchSpecialist(args: {
     body: args.body,
     amountAtoms: args.amountAtoms,
     briefId: args.briefId,
-    delegation: args.budget.delegation,
+    delegations: args.budget.delegations,
     authorization,
   })
   if (authorization) args.shared.pendingAuthorization = undefined

@@ -36,7 +36,7 @@ const PaymentEnvelopeSchema = z.object({
   amountAtoms: z.string().regex(/^\d+$/),
   briefId: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
   specialistKind: z.enum(SPECIALIST_KINDS),
-  delegation: z.record(z.string(), z.unknown()),
+  delegations: z.array(z.record(z.string(), z.unknown())).min(1),
   authorizationList: z.array(AuthorizationListEntrySchema).optional(),
 })
 
@@ -154,7 +154,7 @@ async function relayDelegationRedemption(args: SettleArgs): Promise<SettleResult
     authorizationList,
     transactions: [
       {
-        permissionContext: [envelope.delegation],
+        permissionContext: envelope.delegations,
         executions,
       },
     ],
