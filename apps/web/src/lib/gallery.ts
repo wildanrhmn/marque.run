@@ -72,13 +72,22 @@ export async function fetchPieces(owner: Address): Promise<Piece[]> {
   const contract = publicEnv.NEXT_PUBLIC_MINT_CONTRACT as Address
   if (contract === "0x0000000000000000000000000000000000000000") return []
 
-  const logs = await client.getLogs({
-    address: contract,
-    event: PIECE_MINTED,
-    args: { operator: owner },
-    fromBlock: DEPLOY_BLOCK,
-    toBlock: "latest",
-  })
+  const latest = await client.getBlockNumber()
+  const SPAN = 9000n
+  const chunks = []
+  for (let from = DEPLOY_BLOCK; from <= latest; from += SPAN + 1n) {
+    const to = from + SPAN > latest ? latest : from + SPAN
+    chunks.push(
+      await client.getLogs({
+        address: contract,
+        event: PIECE_MINTED,
+        args: { operator: owner },
+        fromBlock: from,
+        toBlock: to,
+      }),
+    )
+  }
+  const logs = chunks.flat()
 
   const dateCache = new Map<string, string>()
   const resolveDate = async (blockNumber: bigint): Promise<string | undefined> => {

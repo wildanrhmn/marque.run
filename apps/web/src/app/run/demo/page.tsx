@@ -716,14 +716,23 @@ export default function RunDemoPage() {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="mb-7 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
-                  <span className="absolute h-12 w-12 animate-ping rounded-full bg-brass/20" />
-                  <span className="relative h-2.5 w-2.5 rounded-full bg-brass shadow-glow-brass" />
+                <div className="relative mx-auto mb-5 h-14 w-14">
+                  <span className="absolute inset-0 rounded-full border-2 border-bone/[0.08]" />
+                  <motion.span
+                    className="absolute inset-0 rounded-full border-2 border-transparent border-t-brass border-r-brass/40"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
+                  />
+                  <motion.span
+                    className="absolute inset-[6px] rounded-full bg-brass/15 shadow-glow-brass"
+                    animate={{ scale: [1, 1.18, 1], opacity: [0.6, 0.25, 0.6] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                  />
                 </div>
                 <h1 className="font-display text-2xl font-semibold tracking-tight text-bone sm:text-3xl">
                   Creating your {tpl.label.toLowerCase()}
                 </h1>
-                <p className="mx-auto mt-2 max-w-md text-[13px] italic text-bone/50">“{prompt}”</p>
+                <p className="mx-auto mt-2 line-clamp-3 max-w-md text-[13px] italic text-bone/50">“{prompt}”</p>
               </div>
 
               <div className="panel relative overflow-hidden p-5">
