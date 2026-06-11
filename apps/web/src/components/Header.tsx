@@ -77,8 +77,9 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
       )}
     >
       <div className="flex items-center pl-1">
-        <Link href="/" aria-label="Marque home">
+        <Link href="/" aria-label="Marque home" className="flex items-center gap-2">
           <SealMark size={26} />
+          <span className="font-display text-[15px] font-semibold tracking-tight text-bone">Marque</span>
         </Link>
       </div>
 
@@ -103,22 +104,16 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
           </Link>
         ) : account.isConnected && account.address ? (
           <>
-            {onBase ? (
-              <span className="hidden h-9 items-center gap-1.5 rounded-full border border-live/30 px-3 text-[12px] text-live sm:inline-flex">
-                <span className="h-1.5 w-1.5 rounded-full bg-live shadow-glow-live" />
-                {networkName(account.chainId)}
-              </span>
-            ) : (
+            {!onBase ? (
               <button
                 onClick={() => switchChain({ chainId: BASE_CHAIN_ID })}
                 disabled={isSwitching}
                 className="inline-flex h-9 items-center gap-1.5 rounded-full border border-brass/40 bg-brass/[0.08] px-3 text-[12px] text-brass transition-colors hover:bg-brass/[0.16]"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-brass" />
-                {isSwitching ? "Switching…" : `${networkName(account.chainId)} · Switch to Base`}
+                {isSwitching ? "Switching…" : "Switch to Base"}
               </button>
-            )}
-            {onBase && variant === "app" ? (
+            ) : variant === "app" ? (
               !studio.sessionAddress ? (
                 <button
                   onClick={() => studio.ensureSession().catch(() => {})}
@@ -129,13 +124,10 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
               ) : (
                 <button
                   onClick={studio.openManage}
-                  className="group inline-flex h-9 items-center gap-2 rounded-full border border-brass/30 bg-brass/[0.07] px-3 transition hover:bg-brass/[0.14]"
+                  className="group inline-flex h-9 items-center gap-1.5 rounded-full border border-brass/30 bg-brass/[0.07] px-3 transition hover:bg-brass/[0.14]"
                 >
-                  <span className="hidden text-[9px] font-semibold uppercase tracking-[0.14em] text-brass/70 sm:inline">
-                    Balance
-                  </span>
                   <span className="font-display text-[13px] font-semibold text-bone">${studio.balanceUsd.toFixed(2)}</span>
-                  <span className="grid h-4 w-4 place-items-center rounded-full bg-brass/20 text-[12px] leading-none text-brass">
+                  <span className="grid h-4 w-4 place-items-center rounded-full bg-brass/25 text-[13px] leading-none text-brass">
                     +
                   </span>
                 </button>
@@ -144,6 +136,7 @@ export function Header({ variant = "landing" }: { variant?: "landing" | "app" })
             <button
               onClick={() => disconnect()}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-bone/[0.1] bg-bone/[0.03] px-3 transition-colors hover:border-brass/30"
+              title={`${networkName(account.chainId)} · click to disconnect`}
             >
               <span className="h-2 w-2 rounded-full bg-live shadow-glow-live" />
               <span className="hidden font-mono text-xs text-bone/80 sm:inline">{shortAddress(account.address)}</span>
