@@ -50,18 +50,27 @@ export class VeniceRestClient {
   }
 
   private async post(path: string, body: unknown, timeoutMs = SYNC_TIMEOUT_MS): Promise<Response> {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    try {
-      return await this.fetchImpl(`${this.base}/${path}`, {
-        method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(timer)
+    const maxAttempts = 4
+    let last: Response | undefined
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      try {
+        const res = await this.fetchImpl(`${this.base}/${path}`, {
+          method: "POST",
+          headers: this.headers(),
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        })
+        if (res.status !== 429 && res.status !== 503) return res
+        last = res
+        logger.warn({ path, status: res.status, attempt }, "venice overloaded, retrying")
+      } finally {
+        clearTimeout(timer)
+      }
+      if (attempt < maxAttempts - 1) await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)))
     }
+    return last as Response
   }
 
   async chat(args: { model: string; system?: string; user: string; jsonObject?: boolean; maxTokens?: number }): Promise<string> {

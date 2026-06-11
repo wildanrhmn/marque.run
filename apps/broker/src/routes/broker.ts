@@ -298,9 +298,6 @@ brokerRoute.post("/venice/:specialistKind", async (c) => {
     throw new BrokerVerificationError("specialistKind mismatch between url and envelope")
   }
 
-  const { taskId } = await relayDelegationRedemption({ ctx, envelope })
-  const { hash } = await awaitTaskConfirmed({ ctx, taskId, timeoutMs: 90_000 })
-
   const veniceEndpoint = SPECIALIST_TO_VENICE[kindParam]
   const requestBody = (await c.req.json().catch(() => null)) as unknown
   if (requestBody === null) {
@@ -316,6 +313,9 @@ brokerRoute.post("/venice/:specialistKind", async (c) => {
   })
 
   const result = await runVenice(ctx.venice, kindParam, requestBody)
+
+  const { taskId } = await relayDelegationRedemption({ ctx, envelope })
+  const { hash } = await awaitTaskConfirmed({ ctx, taskId, timeoutMs: 90_000 })
 
   state.emit({
     briefId: envelope.briefId as Hex,
