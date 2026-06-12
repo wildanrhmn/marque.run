@@ -64,45 +64,48 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph Client["🖥 apps/web · Next.js studio"]
-        UI["Studio UI /run"]
-        STU["StudioProvider<br/>session account · balance"]
-        ORC["Orchestrator<br/>per-agent x402 calls"]
+    MM["🦊 You · MetaMask"]
+
+    subgraph WEB["apps/web · studio"]
+        direction LR
+        ORC["Orchestrator"]
+        UI["Studio UI + balance"]
         GAL["Gallery"]
     end
 
-    subgraph Broker["🛰 apps/broker · Hono · x402-7710 facilitator"]
-        VEN["/broker/venice/:agent<br/>redeem → generate"]
-        MNT["/mint<br/>pin to IPFS → mint"]
-        STR["/stream SSE · /webhook"]
+    subgraph BRK["apps/broker · x402-7710 facilitator"]
+        direction LR
+        VEN["/broker/venice/:agent"]
+        MNT["/mint"]
     end
 
-    subgraph Onchain["⛓ Base mainnet"]
-        ONESHOT["1Shot relayer"]
-        DELMGR["DelegationManager"]
-        PIECE["MarquePiece ERC-721"]
+    subgraph EXT["external services + Base mainnet"]
+        direction LR
+        VENICE["🎨 Venice AI"]
+        ONE["⛓ 1Shot relayer"]
+        PINATA["📌 Pinata / IPFS"]
+        PIECE["🖼 MarquePiece NFT"]
     end
 
-    VENICE["🎨 Venice AI<br/>text · image · voice · music · video"]
-    PINATA["📌 Pinata / IPFS"]
+    MM -->|deposit / sign| UI
+    UI --> ORC
+    ORC -->|"x402 · ERC-7710 chain"| VEN
+    UI -->|save| MNT
 
-    UI --> STU --> ORC
-    ORC -->|"X-PAYMENT<br/>(ERC-7710 chain)"| VEN
-    VEN -->|redeem| ONESHOT --> DELMGR
     VEN -->|generate| VENICE
-    UI -->|Save| MNT
-    MNT --> PINATA
+    VEN -->|"settle · gas in USDC"| ONE
+    MNT -->|pin media| PINATA
     MNT -->|mintPiece| PIECE
+
     GAL -->|read PieceMinted| PIECE
-    GAL -->|resolve media| PINATA
-    VEN -. status .- STR
+    GAL -->|load media| PINATA
 
     classDef web fill:#1c1708,stroke:#c9a45c,color:#ece6d8
     classDef brk fill:#13110a,stroke:#e2bd74,color:#ece6d8
-    classDef chn fill:#0a1a2f,stroke:#5fd4c4,color:#ece6d8
-    class UI,STU,ORC,GAL web
-    class VEN,MNT,STR brk
-    class ONESHOT,DELMGR,PIECE chn
+    classDef ext fill:#0a1a2f,stroke:#5fd4c4,color:#ece6d8
+    class UI,ORC,GAL web
+    class VEN,MNT brk
+    class VENICE,ONE,PINATA,PIECE ext
 ```
 
 ## End-to-end flow
