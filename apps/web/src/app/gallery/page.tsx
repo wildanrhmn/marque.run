@@ -145,13 +145,37 @@ export default function GalleryPage() {
                 cta
               />
             ) : (
-              <RevealStagger key={filter} className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {visible.map((piece, i) => (
-                  <RevealItem key={`${piece.tokenId}-${piece.title}-${i}`}>
-                    <PieceCard piece={piece} onClick={() => setSelected(piece)} />
-                  </RevealItem>
-                ))}
-              </RevealStagger>
+              <>
+                <RevealStagger key={filter} className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {visible.map((piece, i) => (
+                    <RevealItem key={`${piece.tokenId}-${piece.title}-${i}`}>
+                      <PieceCard piece={piece} onClick={() => setSelected(piece)} />
+                    </RevealItem>
+                  ))}
+                </RevealStagger>
+
+                <div className="relative mt-8 overflow-hidden rounded-2xl border border-brass/20 bg-brass/[0.04] px-6 py-8">
+                  <div
+                    className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full blur-3xl"
+                    style={{ background: "radial-gradient(circle, rgba(201,164,92,0.18), transparent 70%)" }}
+                    aria-hidden
+                  />
+                  <div className="relative flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+                    <div>
+                      <h3 className="font-display text-xl font-semibold text-bone">Make another piece</h3>
+                      <p className="mt-1 max-w-md text-sm text-bone/55">
+                        Set a budget, write a sentence, and the next one mints right here. You only pay for what you make.
+                      </p>
+                    </div>
+                    <Link href="/run" className="btn-primary shine-host h-11 shrink-0 px-6">
+                      Open the studio
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M5 12h14M13 6l6 6-6 6" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+              </>
             )}
           </>
         )}
