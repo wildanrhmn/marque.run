@@ -18,6 +18,17 @@ import { pinataEnabled, pinBuffer, pinJson } from "../pinata"
 import { state } from "../state"
 import { loadEnv } from "../env"
 import { logger } from "../log"
+import { settleExact } from "../settle"
+import type { OneShotAuthorizationListEntry } from "../oneshot"
+
+const AuthEntrySchema = z.object({
+  address: z.string(),
+  chainId: z.number(),
+  nonce: z.number(),
+  r: z.string(),
+  s: z.string(),
+  yParity: z.number(),
+})
 
 const BodySchema = z.object({
   briefId: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
@@ -30,6 +41,14 @@ const BodySchema = z.object({
   tone: z.string().optional(),
   voice: z.string().optional(),
   exactText: z.boolean().default(false),
+  imageCount: z.number().int().min(1).max(4).optional(),
+  chargeAtoms: z.string().regex(/^\d+$/).optional(),
+  payment: z
+    .object({
+      delegations: z.array(z.record(z.string(), z.unknown())).min(1),
+      authorizationList: z.array(AuthEntrySchema).optional(),
+    })
+    .optional(),
 })
 
 function dims(aspect: string): { w: number; h: number } {
@@ -78,8 +97,9 @@ generateRoute.post("/", async (c) => {
     try {
       emit("operator.brief.submitted", { template: body.template, quality: body.quality })
 
+      const singleImage = body.template === "images" && (body.imageCount ?? tpl.stillCount ?? 1) <= 1
       let concept: ConceptOutput | null = null
-      if (tpl.steps.script && !exactVoiceover) {
+      if (tpl.steps.script && !exactVoiceover && !singleImage) {
         const conceptRaw = await venice.chat({
           model: FIXED_MODELS.concept,
           system: CONCEPT_SYSTEM,
@@ -94,13 +114,20 @@ generateRoute.post("/", async (c) => {
       const sceneSource = concept?.scenes ?? []
       const wantScenes = tpl.steps.video
         ? sceneCountFor(body.durationSec, tier)
-        : (tpl.stillCount ?? sceneSource.length)
+        : (body.imageCount ?? tpl.stillCount ?? sceneSource.length)
       const scenes = sceneSource.slice(0, Math.max(1, wantScenes))
+      while ((tpl.steps.video || tpl.steps.image) && scenes.length < wantScenes) {
+        const src =
+          sceneSource.length > 0
+            ? sceneSource[scenes.length % sceneSource.length]!
+            : { description: body.prompt, voiceLine: body.prompt }
+        scenes.push(src)
+      }
       const stylePalette = (concept?.brand?.palette ?? []).join(", ")
 
       const images: { base64: string; mime: string; cid: string; filename: string }[] = []
       if (tpl.steps.image) {
-        const count = tpl.steps.video ? scenes.length : Math.min(scenes.length, tpl.stillCount ?? 4)
+        const count = tpl.steps.video ? scenes.length : Math.min(scenes.length, body.imageCount ?? tpl.stillCount ?? 4)
         for (let i = 0; i < count; i++) {
           const scene = scenes[i]!
           emit("specialist.venice.request", { step: "image", scene: i + 1 }, "image")
@@ -193,11 +220,29 @@ generateRoute.post("/", async (c) => {
       const stored = await storeAsset({ data: assetData, contentType })
       const publicBase = env.ONESHOT_WEBHOOK_PUBLIC_BASE_URL.replace(/\/+$/, "")
 
+      let settlementTxHash: Hex | undefined
+      let chargedAtoms: string | undefined
+      let feeUsd: number | undefined
+      if (body.payment && body.chargeAtoms && BigInt(body.chargeAtoms) > 0n) {
+        emit("broker.relay.submitted", { step: "settle", atoms: body.chargeAtoms })
+        const settled = await settleExact({
+          delegations: body.payment.delegations,
+          authorizationList: body.payment.authorizationList as OneShotAuthorizationListEntry[] | undefined,
+          workAtoms: BigInt(body.chargeAtoms),
+        })
+        settlementTxHash = settled.hash
+        chargedAtoms = settled.workAtoms.toString()
+        feeUsd = Number(settled.feeAtoms) / 1_000_000
+        emit("broker.relay.confirmed", { step: "settle", hash: settled.hash, chargedAtoms, feeUsd })
+      }
+
       const balanceEnd = await venice.balanceUsd()
-      const spentUsd =
-        balanceStart != null && balanceEnd != null
-          ? Number(Math.max(0, balanceStart - balanceEnd).toFixed(2))
-          : null
+      const balanceSpentUsd =
+        balanceStart != null && balanceEnd != null ? Number(Math.max(0, balanceStart - balanceEnd).toFixed(4)) : null
+      const spentUsd = chargedAtoms != null ? Number(chargedAtoms) / 1_000_000 : balanceSpentUsd
+      if (balanceSpentUsd != null && chargedAtoms != null) {
+        logger.info({ charged: spentUsd, veniceCost: balanceSpentUsd }, "settled: charged vs venice cost")
+      }
 
       let assetUrl = `${publicBase}/asset/${stored.filename}`
       let assetRef = assetUrl
@@ -266,6 +311,8 @@ generateRoute.post("/", async (c) => {
         ...(metadataCid ? { metadataCid } : {}),
         ...(tokenUri ? { tokenUri } : {}),
         ...(spentUsd != null ? { spentUsd } : {}),
+        ...(feeUsd != null ? { feeUsd } : {}),
+        ...(settlementTxHash ? { settlementTxHash } : {}),
       })
     } catch (err) {
       logger.error({ err }, "generate pipeline failed")

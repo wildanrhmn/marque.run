@@ -27,6 +27,9 @@ export const metadata: Metadata = {
   description:
     "Put a crew of specialist agents to work on a budget you control. Give a brief, they build a finished piece, and you own the result. No keys handed over, no funds held, nothing left running.",
   metadataBase: new URL("https://marque.run"),
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
   openGraph: {
     title: "Marque",
     description:

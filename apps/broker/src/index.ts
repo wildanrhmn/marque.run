@@ -11,6 +11,7 @@ import { streamRoute } from "./routes/stream"
 import { composeRoute } from "./routes/compose"
 import { assetRoute } from "./routes/asset"
 import { generateRoute } from "./routes/generate"
+import { quoteRoute } from "./routes/quote"
 import { mintRoute } from "./routes/mint"
 
 const env = loadEnv()
@@ -38,6 +39,8 @@ const bearerOnly = async (c: import("hono").Context, next: () => Promise<void>) 
 app.use("/broker/*", bearerOnly)
 app.use("/compose/*", bearerOnly)
 app.use("/generate/*", bearerOnly)
+app.use("/quote/*", bearerOnly)
+app.use("/quote", bearerOnly)
 app.use("/mint/*", bearerOnly)
 
 app.route("/health", healthRoute)
@@ -48,6 +51,7 @@ app.route("/stream", streamRoute)
 app.route("/compose", composeRoute)
 app.route("/asset", assetRoute)
 app.route("/generate", generateRoute)
+app.route("/quote", quoteRoute)
 app.route("/mint", mintRoute)
 
 app.onError((err, c) => {

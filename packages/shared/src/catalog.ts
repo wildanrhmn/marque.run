@@ -127,19 +127,29 @@ export const TEMPLATES: Record<TemplateKey, TemplateSpec> = {
     steps: { script: true, image: false, voice: true, music: false, video: false },
   },
   images: {
-    label: "Image set",
-    tagline: "A set of on-brand still images",
-    placeholder: "Three earthy product shots of artisan coffee bags, warm tones",
+    label: "Image",
+    tagline: "On-brand still images, pick how many",
+    placeholder: "An earthy product shot of an artisan coffee bag, warm tones",
     steps: { script: true, image: true, voice: false, music: false, video: false },
-    stillCount: 4,
+    stillCount: 1,
   },
 }
 
+export const VENICE_RATES = {
+  imageUsd: 0.05,
+  musicUsd: 0.24,
+  ttsUsdPerMillionChars: 3.5,
+} as const
+
+export function narrationCharEstimate(durationSec: number): number {
+  return Math.max(80, Math.round(durationSec * 15))
+}
+
 const PRICE = {
-  script: 0.02,
-  image: 0.12,
-  voice: 0.05,
-  music: 0.12,
+  script: 0,
+  image: VENICE_RATES.imageUsd,
+  voice: 0.01,
+  music: VENICE_RATES.musicUsd,
 }
 
 const MAX_SCENES = 6

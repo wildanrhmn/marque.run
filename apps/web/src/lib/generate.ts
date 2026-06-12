@@ -1,6 +1,12 @@
 import type { Hex } from "viem"
 import type { TemplateKey, QualityTier } from "@marque/shared"
+import type { OperatorAuthorization } from "./smartaccount"
 import { publicEnv } from "./env"
+
+export interface GeneratePayment {
+  delegations: unknown[]
+  authorizationList?: OperatorAuthorization[]
+}
 
 export interface GenerateRequest {
   prompt: string
@@ -12,6 +18,9 @@ export interface GenerateRequest {
   tone?: string
   voice?: string
   exactText?: boolean
+  imageCount?: number
+  chargeAtoms?: string
+  payment?: GeneratePayment
 }
 
 export interface GenerateStarted {

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="mqBrass" cx="0.24" cy="0.2" r="0.5">
+      <stop offset="0%" stop-color="#e2bd74" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#e2bd74" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="mqLive" cx="0.8" cy="0.82" r="0.5">
+      <stop offset="0%" stop-color="#5fd4c4" stop-opacity="0.26" />
+      <stop offset="100%" stop-color="#5fd4c4" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="mqGrid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0 H0 V64" fill="none" stroke="#ece6d8" stroke-opacity="0.04" stroke-width="1" />
+    </pattern>
+  </defs>
+  <rect width="1024" height="1024" rx="180" fill="#08090b" />
+  <rect width="1024" height="1024" rx="180" fill="url(#mqGrid)" />
+  <rect width="1024" height="1024" rx="180" fill="url(#mqBrass)" />
+  <rect width="1024" height="1024" rx="180" fill="url(#mqLive)" />
+  <rect x="2" y="2" width="1020" height="1020" rx="178" fill="none" stroke="#c9a45c" stroke-opacity="0.28" stroke-width="2" />
+  <svg x="172" y="172" width="680" height="680" viewBox="0 0 32 32" fill="none" stroke="#ece6d8">
+    <circle cx="16" cy="16" r="13.6" stroke-width="1.4" opacity="0.5" />
+    <circle cx="16" cy="16" r="11" stroke-width="0.7" opacity="0.3" />
+    <path d="M10.5 21.5 V12 L16 17.5 L21.5 12 V21.5" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter" />
+  </svg>
+</svg>

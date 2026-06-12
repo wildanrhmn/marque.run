@@ -3,9 +3,10 @@ import { publicEnv } from "./env"
 
 export interface MintInput {
   recipient: string
-  contentType: string
-  base64: string
-  name: string
+  tokenUri?: string
+  contentType?: string
+  base64?: string
+  name?: string
   description?: string
   template?: string
   briefId?: string
@@ -16,8 +17,8 @@ export interface MintInput {
 export interface MintResult {
   txHash: Hex
   tokenUri: string
-  assetCid: string
-  metadataCid: string
+  assetCid?: string
+  metadataCid?: string
 }
 
 export async function urlToBase64(url: string): Promise<{ base64: string; contentType: string }> {

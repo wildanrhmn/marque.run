@@ -13,9 +13,10 @@ const MARQUE_PIECE_ABI = parseAbi([
 
 const BodySchema = z.object({
   recipient: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-  contentType: z.string().min(1),
-  base64: z.string().min(1),
-  name: z.string().min(1),
+  tokenUri: z.string().min(1).optional(),
+  contentType: z.string().min(1).optional(),
+  base64: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
   description: z.string().optional(),
   template: z.string().optional(),
   briefId: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
@@ -36,33 +37,41 @@ export const mintRoute = new Hono()
 mintRoute.post("/", async (c) => {
   const env = loadEnv()
   if (!env.MARQUE_PIECE_ADDRESS) return c.json({ error: "mint contract not configured" }, 400)
-  if (!pinataEnabled()) return c.json({ error: "pinata not configured" }, 400)
 
   const json = await c.req.json().catch(() => null)
   const parsed = BodySchema.safeParse(json)
   if (!parsed.success) return c.json({ error: "invalid body", issues: parsed.error.flatten() }, 400)
   const body = parsed.data
 
-  const slug = body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "marque-piece"
-  const assetBuf = Buffer.from(body.base64, "base64")
-  const assetPin = await pinBuffer(assetBuf, `${slug}.${extFor(body.contentType)}`, body.contentType)
+  let tokenUri = body.tokenUri
+  let assetCid: string | undefined
+  let metadataCid: string | undefined
 
-  const isAudio = body.contentType.startsWith("audio")
-  const isVideo = body.contentType.startsWith("video")
-  const metadata = {
-    name: body.name,
-    description: body.description ?? "",
-    image: isAudio || isVideo ? assetPin.ipfsUri : assetPin.ipfsUri,
-    animation_url: assetPin.ipfsUri,
-    attributes: [
-      ...(body.template ? [{ trait_type: "template", value: body.template }] : []),
-      ...(body.spentUsd != null ? [{ trait_type: "spend_usd", value: body.spentUsd }] : []),
-    ],
+  if (!tokenUri) {
+    if (!pinataEnabled()) return c.json({ error: "pinata not configured" }, 400)
+    if (!body.base64 || !body.contentType || !body.name) {
+      return c.json({ error: "tokenUri or (base64 + contentType + name) required" }, 400)
+    }
+    const slug = body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "marque-piece"
+    const assetBuf = Buffer.from(body.base64, "base64")
+    const assetPin = await pinBuffer(assetBuf, `${slug}.${extFor(body.contentType)}`, body.contentType)
+    const metadata = {
+      name: body.name,
+      description: body.description ?? "",
+      image: assetPin.ipfsUri,
+      animation_url: assetPin.ipfsUri,
+      attributes: [
+        ...(body.template ? [{ trait_type: "template", value: body.template }] : []),
+        ...(body.spentUsd != null ? [{ trait_type: "spend_usd", value: body.spentUsd }] : []),
+      ],
+    }
+    const metaPin = await pinJson(metadata, `meta-${slug}`)
+    tokenUri = metaPin.ipfsUri
+    assetCid = assetPin.cid
+    metadataCid = metaPin.cid
   }
-  const metaPin = await pinJson(metadata, `meta-${slug}`)
-  const tokenUri = metaPin.ipfsUri
 
-  const briefId = (body.briefId ?? keccak256(toHex(`${body.name}|${body.recipient}|${assetPin.cid}`))) as Hex
+  const briefId = (body.briefId ?? keccak256(toHex(`${body.recipient}|${tokenUri}`))) as Hex
   const settlements = (
     body.settlementHashes && body.settlementHashes.length > 0 ? body.settlementHashes : [briefId]
   ) as Hex[]
@@ -84,6 +93,6 @@ mintRoute.post("/", async (c) => {
     return c.json({ error: `mint failed: ${(err as Error).message}` }, 500)
   }
 
-  logger.info({ txHash, recipient: body.recipient, tokenUri, assetCid: assetPin.cid }, "minted MarquePiece")
-  return c.json({ txHash, tokenUri, assetCid: assetPin.cid, metadataCid: metaPin.cid })
+  logger.info({ txHash, recipient: body.recipient, tokenUri, assetCid }, "minted MarquePiece")
+  return c.json({ txHash, tokenUri, assetCid, metadataCid })
 })

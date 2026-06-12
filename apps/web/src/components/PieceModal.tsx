@@ -185,6 +185,15 @@ function PieceMedia({ piece }: { piece: Piece }) {
       </div>
     )
   }
+  if (piece.images && piece.images.length > 1) {
+    return (
+      <div className="grid max-h-[70vh] w-full grid-cols-2 gap-1 overflow-y-auto p-1">
+        {piece.images.map((src, i) => (
+          <img key={i} src={src} alt={`${piece.title} ${i + 1}`} className="aspect-square w-full bg-black object-cover" />
+        ))}
+      </div>
+    )
+  }
   return (
     <img src={piece.mediaUrl} alt={piece.title} className="max-h-[70vh] w-full bg-black object-contain" />
   )

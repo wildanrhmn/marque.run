@@ -130,11 +130,18 @@ export class VeniceRestClient {
     })
   }
 
-  async videoQuote(args: VideoArgs): Promise<number> {
-    const res = await this.post("video/quote", this.videoBody(args))
+  async videoQuote(args: { model: string; duration: string; resolution: string; aspectRatio: string; audio?: boolean }): Promise<number> {
+    const res = await this.post("video/quote", {
+      model: args.model,
+      duration: args.duration,
+      resolution: args.resolution,
+      aspect_ratio: args.aspectRatio,
+      audio: args.audio ?? false,
+    })
     if (!res.ok) throw new VeniceError(`video/quote ${res.status}: ${await res.text()}`, res.status)
     const json = (await res.json()) as { quote?: number }
-    return json.quote ?? 0
+    if (typeof json.quote !== "number") throw new VeniceError(`video/quote returned no numeric quote: ${JSON.stringify(json)}`)
+    return json.quote
   }
 
   async video(args: VideoArgs): Promise<Buffer> {

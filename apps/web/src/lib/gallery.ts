@@ -13,6 +13,7 @@ export interface Piece {
   posterUrl: string
   spendUsd: string
   template: string
+  images?: string[]
   txHash?: string
   mintedDate?: string
   sample?: boolean
@@ -28,6 +29,7 @@ interface PieceMetadata {
   description?: string
   animation_url?: string
   image?: string
+  images?: string[]
   attributes?: MetaAttribute[]
 }
 
@@ -123,6 +125,10 @@ export async function fetchPieces(owner: Address): Promise<Piece[]> {
           posterUrl: kind === "image" ? ipfsToHttp(meta.image ?? meta.animation_url) : ipfsToHttp(meta.image),
           spendUsd: spend,
           template: attr(meta, "template") ?? "ad",
+          images:
+            kind === "image" && Array.isArray(meta.images) && meta.images.length > 0
+              ? meta.images.map(ipfsToHttp)
+              : undefined,
           txHash: log.transactionHash ?? undefined,
           mintedDate,
         }

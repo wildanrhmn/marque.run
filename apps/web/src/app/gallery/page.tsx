@@ -145,7 +145,7 @@ export default function GalleryPage() {
                 cta
               />
             ) : (
-              <RevealStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <RevealStagger key={filter} className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {visible.map((piece, i) => (
                   <RevealItem key={`${piece.tokenId}-${piece.title}-${i}`}>
                     <PieceCard piece={piece} onClick={() => setSelected(piece)} />
@@ -164,25 +164,29 @@ export default function GalleryPage() {
 
 function PieceCard({ piece, onClick }: { piece: Piece; onClick: () => void }) {
   return (
-    <TiltCard className="rounded-[14px]">
-      <button onClick={onClick} className="block w-full text-left">
-        <article className="panel h-full overflow-hidden transition-colors hover:border-brass/25">
-          <div className="relative aspect-video w-full overflow-hidden border-b border-bone/[0.06] bg-black">
+    <TiltCard className="h-full rounded-[14px]">
+      <button onClick={onClick} className="flex h-full w-full flex-col text-left">
+        <article className="panel flex h-full flex-col overflow-hidden transition-colors hover:border-brass/25">
+          <div className="relative aspect-video w-full shrink-0 overflow-hidden border-b border-bone/[0.06] bg-black">
             <Thumb piece={piece} />
             <KindBadge kind={piece.kind} />
-            {piece.sample ? (
+            {piece.images && piece.images.length > 1 ? (
+              <span className="absolute right-2 top-2 rounded-md bg-ink-950/70 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-bone/70 backdrop-blur">
+                {piece.images.length} images
+              </span>
+            ) : piece.sample ? (
               <span className="absolute right-2 top-2 rounded-md bg-ink-950/70 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-bone/60 backdrop-blur">
                 sample
               </span>
             ) : null}
           </div>
-          <div className="p-4">
+          <div className="flex flex-1 flex-col p-4">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="font-display text-base font-semibold text-bone">{piece.title}</h3>
+              <h3 className="line-clamp-1 font-display text-base font-semibold text-bone">{piece.title}</h3>
               {!piece.sample ? <span className="pill-brass shrink-0">#{piece.tokenId}</span> : null}
             </div>
             <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-bone/55">{piece.description}</p>
-            <div className="mt-4 flex items-center gap-4 border-t border-bone/[0.06] pt-3 text-[11px]">
+            <div className="mt-auto flex items-center gap-4 border-t border-bone/[0.06] pt-3 text-[11px]">
               <Meta label="spend" value={`$${piece.spendUsd}`} />
               <Meta label="type" value={piece.template} />
               {piece.mintedDate ? <Meta label="minted" value={piece.mintedDate} /> : null}
@@ -195,6 +199,16 @@ function PieceCard({ piece, onClick }: { piece: Piece; onClick: () => void }) {
 }
 
 function Thumb({ piece }: { piece: Piece }) {
+  if (piece.kind === "image" && piece.images && piece.images.length > 1) {
+    const imgs = piece.images.slice(0, 4)
+    return (
+      <div className={cn("grid h-full w-full gap-0.5", imgs.length >= 3 ? "grid-cols-2 grid-rows-2" : "grid-cols-2")}>
+        {imgs.map((src, i) => (
+          <img key={i} src={src} alt="" className="h-full w-full object-cover" />
+        ))}
+      </div>
+    )
+  }
   if (piece.kind === "image" && piece.posterUrl) {
     return <img src={piece.posterUrl} alt={piece.title} className="h-full w-full object-cover" />
   }
