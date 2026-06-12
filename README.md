@@ -182,16 +182,6 @@ marque.run/
 | EIP7702StatelessDeleGator | `0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B` |
 | USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
-## Hackathon tracks
-
-| Track | Where it lives |
-|---|---|
-| **Best x402 + ERC-7710** | the broker is an x402-7710 facilitator; the agent→broker call carries the delegation chain |
-| **Best 1Shot Relayer** | mainnet redemptions + EIP-7702 authorizations, gas in USDC |
-| **Best A2A coordination** | studio account → director → relayer redelegation chain |
-| **Best Agent** | MetaMask Smart Account in the main flow |
-| **Best use of Venice** | five Venice endpoints across the agent swarm |
-
 ## Getting started
 
 **Prerequisites:** Node 22+, pnpm 10+ (`corepack enable && corepack prepare pnpm@10.10.0 --activate`), Foundry, a MetaMask wallet on Base mainnet with a little USDC + ETH.
