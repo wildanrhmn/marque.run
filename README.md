@@ -40,7 +40,7 @@ Every output is paid for per use from the same USDC balance, and minted to you a
 ## The money & trust model
 
 ```mermaid
-flowchart LR
+flowchart TD
     MM["🦊 Your MetaMask<br/>(controls everything)"] -->|deposit USDC| SA["◆ Studio Smart Account<br/>EIP-7702 · holds your balance"]
     SA -->|"ERC-7710 delegation<br/>(USDC cap, expiry)"| DIR["🤖 Director agent<br/>ephemeral session key"]
     DIR -->|"ERC-7710 redelegation<br/>(narrowed)"| RLY["⛓ 1Shot relayer target"]
