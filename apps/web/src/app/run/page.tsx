@@ -247,7 +247,7 @@ export default function RunPage() {
     if (!key) return
     const idx = shownSteps.findIndex((s) => s.key === key)
     if (idx >= 0) {
-      setStepIndex(idx)
+      setStepIndex((prev) => Math.max(prev, idx))
       setStatusLine(shownSteps[idx]!.label)
     }
   }

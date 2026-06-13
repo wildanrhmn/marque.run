@@ -143,6 +143,27 @@ generateRoute.post("/", async (c) => {
         }
       }
 
+      let voice: Buffer | undefined
+      if (tpl.steps.voice) {
+        emit("specialist.venice.request", { step: "voice" }, "voice")
+        const lines = exactVoiceover
+          ? body.prompt
+          : scenes.map((s) => s.voiceLine).filter(Boolean).join(" ") || body.prompt
+        voice = await venice.tts({
+          model: FIXED_MODELS.voice,
+          input: lines,
+          voice: body.voice ?? env.VENICE_VOICE,
+        })
+        emit("specialist.venice.response", { step: "voice", bytes: voice.byteLength }, "voice")
+      }
+
+      let music: Buffer | undefined
+      if (tpl.steps.music) {
+        emit("specialist.venice.request", { step: "music" }, "music")
+        music = await venice.music({ model: FIXED_MODELS.music, prompt: concept?.musicPrompt ?? body.prompt })
+        emit("specialist.venice.response", { step: "music", bytes: music.byteLength }, "music")
+      }
+
       const clips: Buffer[] = []
       if (tpl.steps.video) {
         for (let i = 0; i < scenes.length; i++) {
@@ -174,27 +195,6 @@ generateRoute.post("/", async (c) => {
           clips.push(clip)
           emit("broker.relay.confirmed", { step: "video", scene: i + 1, bytes: clip.byteLength }, "video")
         }
-      }
-
-      let voice: Buffer | undefined
-      if (tpl.steps.voice) {
-        emit("specialist.venice.request", { step: "voice" }, "voice")
-        const lines = exactVoiceover
-          ? body.prompt
-          : scenes.map((s) => s.voiceLine).filter(Boolean).join(" ") || body.prompt
-        voice = await venice.tts({
-          model: FIXED_MODELS.voice,
-          input: lines,
-          voice: body.voice ?? env.VENICE_VOICE,
-        })
-        emit("specialist.venice.response", { step: "voice", bytes: voice.byteLength }, "voice")
-      }
-
-      let music: Buffer | undefined
-      if (tpl.steps.music) {
-        emit("specialist.venice.request", { step: "music" }, "music")
-        music = await venice.music({ model: FIXED_MODELS.music, prompt: concept?.musicPrompt ?? body.prompt })
-        emit("specialist.venice.response", { step: "music", bytes: music.byteLength }, "music")
       }
 
       let assetData: Buffer
