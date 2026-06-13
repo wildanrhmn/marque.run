@@ -108,13 +108,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const refresh = async (addr?: Address) => {
+  const refresh = async (addr?: Address, changedFrom?: bigint) => {
     const target = addr ?? session?.address
     if (!target) return
-    try {
-      setBalanceAtoms(await sessionUsdcBalance(target))
-    } catch {
-      /* ignore */
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const bal = await sessionUsdcBalance(target)
+        setBalanceAtoms(bal)
+        if (changedFrom === undefined || bal !== changedFrom) return
+      } catch {
+        /* ignore */
+      }
+      await new Promise((r) => setTimeout(r, 1500))
     }
   }
 
@@ -146,6 +151,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setError(null)
     try {
       const s = await ensureSession()
+      const beforeAtoms = await sessionUsdcBalance(s.address)
       const atoms = BigInt(Math.floor(usd * 1_000_000))
       const hash = await walletClient.sendTransaction({
         account: account.address,
@@ -153,7 +159,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         data: usdcTransferCalldata(s.address, atoms),
       })
       await waitForTx(hash)
-      await refresh(s.address)
+      await refresh(s.address, beforeAtoms)
       setBudget(null)
       recordActivity({ kind: "deposit", usd, label: "Deposit", ts: Date.now(), hash })
     } catch (err) {
@@ -168,9 +174,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setBusy("withdraw")
     setError(null)
     const before = Number(balanceAtoms) / 1_000_000
+    const beforeAtoms = balanceAtoms
     try {
       await withdrawSession({ session, to: account.address })
-      await refresh(session.address)
+      await refresh(session.address, beforeAtoms)
       setBudget(null)
       recordActivity({ kind: "withdraw", usd: before, label: "Withdraw to wallet", ts: Date.now() })
     } catch (err) {
