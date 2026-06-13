@@ -66,8 +66,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [activity, setActivity] = useState<ActivityItem[]>([])
 
   useEffect(() => {
-    if (!account.address || session) return
+    if (!account.address) {
+      setSession(null)
+      setBalanceAtoms(0n)
+      setBudget(null)
+      setActivity([])
+      setManageOpen(false)
+      return
+    }
     const cached = loadCachedSessionAccount(account.address)
+    setBudget(null)
     if (cached) {
       setSession(cached)
       sessionUsdcBalance(cached.address)
@@ -75,12 +83,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         .catch(() => {})
       try {
         const raw = window.localStorage.getItem(activityKey(cached.address))
-        if (raw) setActivity(JSON.parse(raw) as ActivityItem[])
+        setActivity(raw ? (JSON.parse(raw) as ActivityItem[]) : [])
       } catch {
         /* ignore */
       }
+    } else {
+      setSession(null)
+      setBalanceAtoms(0n)
+      setActivity([])
     }
-  }, [account.address, session])
+  }, [account.address])
 
   const recordActivity = (item: ActivityItem) => {
     setActivity((prev) => {
