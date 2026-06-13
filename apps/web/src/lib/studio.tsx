@@ -108,10 +108,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const refresh = async () => {
-    if (!session) return
+  const refresh = async (addr?: Address) => {
+    const target = addr ?? session?.address
+    if (!target) return
     try {
-      setBalanceAtoms(await sessionUsdcBalance(session.address))
+      setBalanceAtoms(await sessionUsdcBalance(target))
     } catch {
       /* ignore */
     }
@@ -152,7 +153,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         data: usdcTransferCalldata(s.address, atoms),
       })
       await waitForTx(hash)
-      await refresh()
+      await refresh(s.address)
       setBudget(null)
       recordActivity({ kind: "deposit", usd, label: "Deposit", ts: Date.now(), hash })
     } catch (err) {
@@ -169,7 +170,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const before = Number(balanceAtoms) / 1_000_000
     try {
       await withdrawSession({ session, to: account.address })
-      await refresh()
+      await refresh(session.address)
       setBudget(null)
       recordActivity({ kind: "withdraw", usd: before, label: "Withdraw to wallet", ts: Date.now() })
     } catch (err) {
